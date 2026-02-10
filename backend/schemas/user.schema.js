@@ -11,7 +11,6 @@ const signUpSchema = z.object({
 const loginSchema = z.object({
      email: z.string().email({message: "Invalid email address"}),
     password: z.string().min(8,{message: "Password must be greater or equal to 8 chars"}).max(32,{message: "Password must be less or equal than 32 chars"}),
-    confirmPassword: z.string().min(8,{message: "Password must be greater or equal to 8 chars" }).max(32,{message: "Password must be less or equal than 32 chars"}),
 });
 
 module.exports ={signUpSchema , loginSchema};

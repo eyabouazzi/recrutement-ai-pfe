@@ -1,24 +1,24 @@
 import { Button, Form, Input, message } from "antd"
-import { useContext } from "react"; 
-import {useNavigate} from 'react-router-dom'
+import { useContext } from "react";
+import { useNavigate } from 'react-router-dom'
 import axios from "axios"
-import {AuthContext} from '../contexts/authContext.jsx'
+import { AuthContext } from '../contexts/authContext.jsx'
 function Login() {
-    const {setToken}= useContext(AuthContext);
-    
+    const { setToken } = useContext(AuthContext);
+
     const navigate = useNavigate();
 
-   async function onFinish(values) {
-    try{
-        const response = await axios.post('http://localhost:3000/auth/login', values);
-        setToken(response.data.token);
-        message.success(response.data.message);
-        navigate('/');
-    }catch(error){
-        console.log(error);
-        message.error(error.response?.data?.message || 'Login failed');
-     
-    }
+    async function onFinish(values) {
+        try {
+            const response = await axios.post('http://localhost:3000/auth/login', values);
+            setToken(response.data.token);
+            message.success(response.data.message);
+            navigate('/');
+        } catch (error) {
+            console.log(error);
+            message.error(error.response?.data?.message || 'Login failed');
+
+        }
     };
     return (
         <div>

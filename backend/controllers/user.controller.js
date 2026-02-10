@@ -51,6 +51,13 @@ async function getUser(req, res) {
     });
 };
 
+async function listUsers(req, res) {
+    const users = await userModel.find({}, '-password');
+    res.status(200).json({
+        users
+    });
+};
+
 
 async function deleteUser(req, res) {
     const id = req.params.id;
@@ -67,4 +74,4 @@ async function deleteUser(req, res) {
     });
 }
     
-module.exports = {createUser, updateUser, getUser, deleteUser}
+module.exports = {createUser, updateUser, getUser, deleteUser, listUsers}
