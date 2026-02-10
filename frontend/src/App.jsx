@@ -19,12 +19,6 @@ theme={{
   }
 }}
 >
-
-  
-
-
-
-    <AuthProvider>
     <BrowserRouter>
       <Routes>
         <Route path='/login' element={<Login />} />
