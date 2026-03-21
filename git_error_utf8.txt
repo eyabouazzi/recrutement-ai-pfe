@@ -1,0 +1,142 @@
+﻿git : remote: error: 
+GH013: Repository rule 
+violations found for re
+fs/heads/feature/recrui
+tment-platform.        
+Au caractère Ligne:1 : 
+1
++ git push -u origin 
+HEAD 2> git_error.txt 
+; Get-Content 
+git_error.txt
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (remote: error   
+ : ...atform.          
+  :String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+remote: 
+remote: - GITHUB PUSH 
+PROTECTION        
+remote:   ÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö
+ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇ
+öÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö
+ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö     
+   
+remote:     Resolve 
+the following 
+violations before 
+pushing again        
+remote: 
+remote:     - Push 
+cannot contain secrets 
+       
+remote: 
+remote:             
+remote:      (?) Learn 
+how to resolve a 
+blocked push        
+remote:      https://do
+cs.github.com/code-secu
+rity/secret-scanning/wo
+rking-with-secret-scann
+ing-and-push-protection
+/working-with-push-prot
+ection-from-the-command
+-line#resolving-a-block
+ed-push        
+remote:             
+remote:             
+remote:       ÔÇöÔÇö 
+OpenAI API Key ÔÇöÔÇöÔÇ
+öÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö
+ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇ
+öÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇö        
+remote:        
+locations:        
+remote:          - 
+commit: 982953c6df801be
+eb194778ae6ed79ce8ab5e3
+b4        
+remote:            
+path: backend/.env:10  
+      
+remote:          - 
+commit: 982953c6df801be
+eb194778ae6ed79ce8ab5e3
+b4        
+remote:            
+path: backend/.env:13  
+      
+remote:             
+remote:        (?) To 
+push, remove secret 
+from commit(s) or 
+follow this URL to 
+allow the secret.      
+  
+remote:        https://
+github.com/eyabouazzi/r
+ecrutement-ai-pfe/secur
+ity/secret-scanning/unb
+lock-secret/3BGhhTwtNFP
+TUL1Gxe51mnRz2au       
+ 
+remote:             
+remote:             
+remote:       ÔÇöÔÇö 
+OpenAI API Key ÔÇöÔÇöÔÇ
+öÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö
+ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇ
+öÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔ
+ÇöÔÇöÔÇö        
+remote:        
+locations:        
+remote:          - 
+commit: 04270957203c324
+6e616bc3aabf8ecfbb8afc9
+08        
+remote:            
+path: backend/.env:12  
+      
+remote:             
+remote:        (?) To 
+push, remove secret 
+from commit(s) or 
+follow this URL to 
+allow the secret.      
+  
+remote:        https://
+github.com/eyabouazzi/r
+ecrutement-ai-pfe/secur
+ity/secret-scanning/unb
+lock-secret/3BGhhWNWGbB
+UAR1GzXKmighKVNY       
+ 
+remote:             
+remote: 
+remote: 
+To https://github.com/e
+yabouazzi/recrutement-a
+i-pfe.git
+ ! [remote rejected] 
+HEAD -> feature/recruit
+ment-platform (push 
+declined due to 
+repository rule 
+violations)
+error: failed to push 
+some refs to 'https://g
+ithub.com/eyabouazzi/re
+crutement-ai-pfe.git'
