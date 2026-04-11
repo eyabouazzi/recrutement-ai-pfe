@@ -47,3 +47,12 @@ export async function getUser(id) {
         throw new Error(error.response?.data?.message || 'Error fetching user');
     }
 }
+
+export async function deleteUser(id) {
+    try {
+        const response = await axiosClient.delete(`/user/${id}`);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Error deleting user');
+    }
+}

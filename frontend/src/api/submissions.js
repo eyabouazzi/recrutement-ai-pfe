@@ -5,7 +5,36 @@ export async function submitTest(data) {
         const response = await axiosClient.post('/submission/submit', data);
         return response.data;
     } catch (error) {
-        throw new Error(error.response?.data?.message || 'Failed to submit test');
+        throw new Error(error.response?.data?.message || error.response?.data?.error || 'Failed to submit test');
+    }
+}
+
+export async function getTestDraft(testId) {
+    const response = await axiosClient.get(`/submission/draft/${testId}`);
+    return response.data;
+}
+
+export async function saveTestDraft(testId, payload) {
+    const response = await axiosClient.put(`/submission/draft/${testId}`, payload);
+    return response.data;
+}
+
+export async function deleteTestDraft(testId) {
+    const response = await axiosClient.delete(`/submission/draft/${testId}`);
+    return response.data;
+}
+
+export async function fetchHrActivity() {
+    const response = await axiosClient.get('/submission/hr-activity');
+    return response.data;
+}
+
+export async function updateSubmissionPipeline(id, body) {
+    try {
+        const response = await axiosClient.patch(`/submission/${id}/pipeline`, body);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || error.response?.data?.error || 'Mise à jour impossible');
     }
 }
 

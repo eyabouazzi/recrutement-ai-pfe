@@ -21,7 +21,11 @@ const logSchema = new mongoose.Schema({
             'FILE_UPLOADED',
             'PROFILE_UPDATED',
             'SETTINGS_CHANGED',
-            'EXPORT_GENERATED'
+            'EXPORT_GENERATED',
+            'EVALUATION_CRITERIA_UPDATED',
+            'AI_QUESTION_REGENERATED',
+            'WEBHOOK_DISPATCHED',
+            'EMAIL_NOTIFICATION_SENT'
         ]
     },
     actorId: {

@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { Card, Button, Typography, Row, Col, Spin, message, Statistic, Progress, Avatar, Tag, List, Space, Input, Select, Divider, Empty } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { getTests } from '../../api/tests';
+import { getPublicTests } from '../../api/tests';
 import { fetchMySubmissions } from '../../api/submissions';
 import { motion } from 'framer-motion';
+import { AuthContext } from '../../contexts/authContext.jsx';
+import UserAvatar from '../../Components/UserAvatar.jsx';
 import { 
     BookOutlined, 
     ClockCircleOutlined, 
     CheckCircleOutlined, 
-    UserOutlined, 
     BarChartOutlined,
     CalendarOutlined,
     TrophyOutlined,
@@ -23,6 +24,7 @@ const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
 function CandidateDashboard() {
+    const { user } = useContext(AuthContext);
     const [tests, setTests] = useState([]);
     const [mySubmissions, setMySubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -38,6 +40,8 @@ function CandidateDashboard() {
     const [filterStatus, setFilterStatus] = useState('all');
     const navigate = useNavigate();
 
+    const getSubmissionScore = (submission) => submission?.totalScore ?? submission?.score ?? 0;
+
     useEffect(() => {
         fetchDashboardData();
     }, []);
@@ -46,12 +50,15 @@ function CandidateDashboard() {
         try {
             setLoading(true);
             const [testsData, submissionsData] = await Promise.all([
-                getTests(),
+                getPublicTests(),
                 fetchMySubmissions()
             ]);
             
             const availableTests = testsData.tests || [];
-            const submissions = submissionsData.submissions || [];
+            const submissions = (submissionsData.submissions || []).map((sub) => ({
+                ...sub,
+                score: sub?.score ?? sub?.totalScore ?? 0,
+            }));
             
             setTests(availableTests);
             setMySubmissions(submissions);
@@ -61,11 +68,11 @@ function CandidateDashboard() {
             const inProgressTests = submissions.filter(sub => sub.status === 'IN_PROGRESS').length;
             const averageScore = completedTests > 0 
                 ? Math.round(submissions.filter(sub => sub.status === 'GRADED')
-                    .reduce((sum, sub) => sum + (sub.score || 0), 0) / completedTests)
+                    .reduce((sum, sub) => sum + getSubmissionScore(sub), 0) / completedTests)
                 : 0;
             const bestScore = completedTests > 0 
                 ? Math.max(...submissions.filter(sub => sub.status === 'GRADED')
-                    .map(sub => sub.score || 0))
+                    .map((sub) => getSubmissionScore(sub)))
                 : 0;
             
             setStats({
@@ -100,7 +107,7 @@ function CandidateDashboard() {
             if (submission.status === 'GRADED') {
                 return (
                     <Tag icon={<CheckCircleOutlined />} color="success">
-                        Terminé ({submission.score || 0}%)
+                        Terminé ({getSubmissionScore(submission)}%)
                     </Tag>
                 );
             } else if (submission.status === 'IN_PROGRESS') {
@@ -115,6 +122,16 @@ function CandidateDashboard() {
             sub.testId?._id === testId || sub.testId === testId
         );
         return !submission || submission.status !== 'IN_PROGRESS';
+    };
+
+    const handleStartTest = (testId) => {
+        const hasCv = Boolean(user?.cvUrl) || Boolean(String(user?.cvText || '').trim());
+        if (!hasCv) {
+            message.info('Ajoutez votre CV dans votre profil avant de passer cette candidature technique.');
+            navigate('/profile');
+            return;
+        }
+        navigate(`/tests/${testId}`);
     };
 
     // Filter tests based on search and filters
@@ -146,94 +163,71 @@ function CandidateDashboard() {
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            style={styles.container}
-        >
-            {/* Welcome Section */}
-            <motion.div
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
-                style={styles.welcomeSection}
-            >
-                <div style={styles.welcomeContent}>
-                    <Avatar size={64} icon={<UserOutlined />} style={styles.avatar} />
-                    <div>
-                        <Title level={2} style={styles.welcomeTitle}>
-                            Bonjour, Candidat!
-                        </Title>
-                        <Text style={styles.welcomeSubtitle}>
-                            Bienvenue sur votre espace candidat. Prêt à relever de nouveaux défis ?
-                        </Text>
+        <div className="dashboard-container">
+            <div className="dashboard-content">
+                {/* Welcome Section */}
+                <motion.div
+                    initial={{ y: -20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.1, duration: 0.5 }}
+                    className="dashboard-header"
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <UserAvatar user={user} size={64} />
+                        <div>
+                            <Title level={2} className="dashboard-title">
+                                Bonjour, Candidat!
+                            </Title>
+                            <Text className="dashboard-subtitle">
+                                Bienvenue sur votre espace candidat. Prêt à relever de nouveaux défis ?
+                            </Text>
+                        </div>
                     </div>
-                </div>
-            </motion.div>
+                </motion.div>
 
-            {/* Stats Overview */}
-            <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2, duration: 0.5 }}
-                style={styles.statsSection}
-            >
-                <Row gutter={[24, 24]}>
-                    <Col xs={24} sm={12} lg={5}>
-                        <Card style={styles.statCard}>
-                            <Statistic
-                                title="Tests Disponibles"
-                                value={stats.totalTests}
-                                prefix={<BookOutlined />}
-                                valueStyle={{ color: '#3b82f6' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={5}>
-                        <Card style={styles.statCard}>
-                            <Statistic
-                                title="Tests Complétés"
-                                value={stats.completedTests}
-                                prefix={<CheckCircleOutlined />}
-                                valueStyle={{ color: '#10b981' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={5}>
-                        <Card style={styles.statCard}>
-                            <Statistic
-                                title="En Cours"
-                                value={stats.inProgress}
-                                prefix={<ClockCircleOutlined />}
-                                valueStyle={{ color: '#f59e0b' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={5}>
-                        <Card style={styles.statCard}>
-                            <Statistic
-                                title="Meilleur Score"
-                                value={stats.bestScore}
-                                suffix="%"
-                                prefix={<TrophyOutlined />}
-                                valueStyle={{ color: '#f59e0b' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={4}>
-                        <Card style={styles.statCard}>
-                            <Statistic
-                                title="Score Moyen"
-                                value={stats.averageScore}
-                                suffix="%"
-                                prefix={<BarChartOutlined />}
-                                valueStyle={{ color: '#8b5cf6' }}
-                            />
-                        </Card>
-                    </Col>
-                </Row>
-            </motion.div>
+                {/* Stats Overview */}
+                <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.2, duration: 0.5 }}
+                    className="stats-grid"
+                >
+                    <div className="stat-card primary">
+                        <div className="stat-icon">
+                            <BookOutlined />
+                        </div>
+                        <div className="stat-value">{stats.totalTests}</div>
+                        <div className="stat-label">Tests Disponibles</div>
+                    </div>
+                    <div className="stat-card success">
+                        <div className="stat-icon">
+                            <CheckCircleOutlined />
+                        </div>
+                        <div className="stat-value">{stats.completedTests}</div>
+                        <div className="stat-label">Tests Complétés</div>
+                    </div>
+                    <div className="stat-card warning">
+                        <div className="stat-icon">
+                            <ClockCircleOutlined />
+                        </div>
+                        <div className="stat-value">{stats.inProgress}</div>
+                        <div className="stat-label">En Cours</div>
+                    </div>
+                    <div className="stat-card info">
+                        <div className="stat-icon">
+                            <TrophyOutlined />
+                        </div>
+                        <div className="stat-value">{stats.bestScore}%</div>
+                        <div className="stat-label">Meilleur Score</div>
+                    </div>
+                    <div className="stat-card secondary">
+                        <div className="stat-icon">
+                            <BarChartOutlined />
+                        </div>
+                        <div className="stat-value">{stats.averageScore}%</div>
+                        <div className="stat-label">Score Moyen</div>
+                    </div>
+                </motion.div>
 
             <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
                 {/* Available Tests */}
@@ -373,7 +367,7 @@ function CandidateDashboard() {
                                                                     type="primary" 
                                                                     size="large"
                                                                     block
-                                                                    onClick={() => navigate(`/tests/${test._id}`)}
+                                                                    onClick={() => handleStartTest(test._id)}
                                                                     disabled={!canTakeTest(test._id)}
                                                                 >
                                                                     {!canTakeTest(test._id) ? 'Déjà en cours' : 'Passer le Test'}
@@ -426,7 +420,7 @@ function CandidateDashboard() {
                                     dataSource={mySubmissions.slice(0, 5)}
                                     renderItem={submission => {
                                         const testTitle = submission.testId?.title || 'Test inconnu';
-                                        const score = submission.score || 0;
+                                        const score = getSubmissionScore(submission);
                                         const isGraded = submission.status === 'GRADED';
                                         
                                         return (
@@ -499,125 +493,90 @@ function CandidateDashboard() {
                     </motion.div>
                 </Col>
             </Row>
-        </motion.div>
+            </div>
+        </div>
     );
 }
 
 const styles = {
-    container: {
-        padding: 24,
-        fontFamily: "'Inter', sans-serif"
-    },
-    welcomeSection: {
-        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-        borderRadius: 16,
-        padding: 32,
-        marginBottom: 32,
-        color: 'white'
-    },
-    welcomeContent: {
+    sectionTitle: {
         display: 'flex',
         alignItems: 'center',
-        gap: 20
-    },
-    avatar: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        border: '3px solid rgba(255,255,255,0.3)'
-    },
-    welcomeTitle: {
-        color: 'white',
-        margin: 0,
-        fontSize: 28,
-        fontWeight: 700
-    },
-    welcomeSubtitle: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 16,
-        marginTop: 8
-    },
-    statsSection: {
-        marginBottom: 24
-    },
-    statCard: {
-        borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-        border: '1px solid #f1f5f9'
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 600,
-        display: 'flex',
-        alignItems: 'center'
+        fontSize: 15,
+        fontWeight: 700,
+        color: '#1e293b',
     },
     mainCard: {
         borderRadius: 16,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-        border: '1px solid #f1f5f9'
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
     },
     sidebarCard: {
         borderRadius: 16,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-        border: '1px solid #f1f5f9',
-        height: '100%'
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+        height: '100%',
     },
-    emptyState: {
-        textAlign: 'center',
-        padding: 40
-    },
-    emptyStateSmall: {
-        textAlign: 'center',
-        padding: 20
+    filtersSection: {
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottom: '1px solid #f1f5f9',
     },
     testsGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-        gap: 20
+        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+        gap: 20,
     },
     testCard: {
-        borderRadius: 12,
+        borderRadius: 14,
+        border: '1px solid #e2e8f0',
         overflow: 'hidden',
-        border: '1px solid #f1f5f9',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        height: '100%',
     },
     testCover: {
-        height: 120,
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20
+        padding: '20px 16px 16px',
+        minHeight: 80,
     },
     coverContent: {
-        textAlign: 'center',
-        color: 'white'
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 8,
     },
     jobRole: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 600,
-        display: 'block',
-        marginBottom: 8
+        color: '#fff',
+        fontWeight: 700,
+        fontSize: 14,
     },
     testTitle: {
-        fontSize: 18,
-        fontWeight: 600,
-        color: '#1e293b',
-        marginBottom: 8
+        fontSize: 15,
+        fontWeight: 700,
+        color: '#0f172a',
+        marginBottom: 4,
     },
     testDescription: {
-        minHeight: 120
+        fontSize: 13,
+        color: '#64748b',
     },
     testMeta: {
-        marginBottom: 16
+        marginBottom: 12,
     },
     testActions: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        marginTop: 12,
     },
     activityItem: {
-        padding: '12px 0'
-    }
+        padding: '10px 0',
+    },
+    emptyStateSmall: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '32px 0',
+        textAlign: 'center',
+    },
 };
 
 export default CandidateDashboard;

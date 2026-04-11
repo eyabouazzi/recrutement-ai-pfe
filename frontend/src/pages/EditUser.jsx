@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { UserOutlined, CameraOutlined } from '@ant-design/icons';
 import { uploadFile } from '../api/files';
 import { updateUser, getUser } from '../api/users';
+import { getAvatarUrl } from '../utils/avatar.js';
 const EditUser = () => {
     const [form] = Form.useForm();
     const [avatar, setAvatar] = useState(null);
@@ -59,7 +60,7 @@ const EditUser = () => {
             <h4>Edit User</h4>
             <Divider />
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: '20px' }}>
-                <Avatar size={80} src={previewAvatar || avatar && `http://localhost:3000/uploads/${avatar}` || undefined}
+                <Avatar size={80} src={previewAvatar || getAvatarUrl(avatar) || undefined}
                     icon={!previewAvatar && !avatar && <UserOutlined />} />
 
                 <Upload beforeUpload={beforeUpload} showUploadList={false} accept="image/*">

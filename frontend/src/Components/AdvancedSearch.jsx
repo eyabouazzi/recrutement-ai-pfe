@@ -18,14 +18,17 @@ export function AdvancedSearch({
     const [activeFilters, setActiveFilters] = useState({});
     const [showFilters, setShowFilters] = useState(false);
 
-    // Initialize filter state
+    // Initialize filter state — use JSON key to avoid re-running on every render
+    // when the parent passes a new array reference with the same content
+    const filtersKey = JSON.stringify(filters.map(f => ({ key: f.key, defaultValue: f.defaultValue ?? '' })));
     useEffect(() => {
         const initialFilters = {};
         filters.forEach(filter => {
             initialFilters[filter.key] = filter.defaultValue || '';
         });
         setActiveFilters(initialFilters);
-    }, [filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filtersKey]);
 
     // Apply search and filters
     const filteredData = useMemo(() => {

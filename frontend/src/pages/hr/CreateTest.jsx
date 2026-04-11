@@ -71,6 +71,13 @@ function CreateTest() {
                     <Form.Item label="Description / Compétences" name="description">
                         <Input.TextArea rows={4} placeholder="Decrivez les compétences recherchées pour guider l'IA (ex: Hooks, Redux, Performance...)" />
                     </Form.Item>
+                    <Form.Item
+                        label="Critères d'évaluation (pour l'IA)"
+                        name="evaluationCriteria"
+                        tooltip="Optionnel. Ex: 40% technique, 30% communication, 30% résolution de problèmes. L'IA en tiendra compte pour le score et le feedback."
+                    >
+                        <Input.TextArea rows={3} placeholder="Pondération ou critères RH pour noter les réponses ouvertes..." />
+                    </Form.Item>
                     <Form.Item label="Durée (minutes)" name="timeLimit" rules={[{ required: true }]} initialValue={30}>
                         <InputNumber min={5} max={180} />
                     </Form.Item>
@@ -104,7 +111,7 @@ function CreateTest() {
                 <div style={{ textAlign: 'center', padding: '40px 0' }}>
                     <Title level={4}>Générer des questions avec l'IA</Title>
                     <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-                        L'IA va se baser sur le titre du poste et la description pour générer 5 questions à choix multiples.
+                        L'IA génère un mix : environ 50 % de QCM et le reste en réponses courtes et cas pratiques, adaptés au poste.
                     </Text>
                     <Space size="large">
                         <Button onClick={() => setCurrentStep(2)}>Ignorer (Ajout manuel plus tard)</Button>
@@ -126,14 +133,19 @@ function CreateTest() {
                             dataSource={generatedQuestions}
                             renderItem={(q, index) => (
                                 <List.Item>
-                                    <Text strong>{index + 1}. {q.prompt}</Text>
-                                    <div style={{ marginTop: 8 }}>
-                                        {q.options.map((opt, i) => (
-                                            <Tag key={i} color={opt === q.correctAnswer ? 'success' : 'default'} style={{ marginBottom: 4 }}>
-                                                {opt}
-                                            </Tag>
-                                        ))}
+                                    <div>
+                                        <Tag color={q.type === 'QCM' ? 'blue' : q.type === 'PROBLEM' ? 'purple' : 'orange'}>{q.type || 'QCM'}</Tag>
+                                        <Text strong style={{ marginLeft: 8 }}>{index + 1}. {q.prompt}</Text>
                                     </div>
+                                    {q.type === 'QCM' && q.options?.length > 0 && (
+                                        <div style={{ marginTop: 8 }}>
+                                            {q.options.map((opt, i) => (
+                                                <Tag key={i} color={opt === q.correctAnswer ? 'success' : 'default'} style={{ marginBottom: 4 }}>
+                                                    {opt}
+                                                </Tag>
+                                            ))}
+                                        </div>
+                                    )}
                                 </List.Item>
                             )}
                         />

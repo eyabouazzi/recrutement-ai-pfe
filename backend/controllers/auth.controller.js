@@ -1,68 +1,84 @@
 const userModel = require('../models/user.model');
+const Submission = require('../models/submission.model');
+const TestDraft = require('../models/testDraft.model');
 const sendEmail = require('../utils/mailer');
+const { smtpConfigured } = require('../utils/emailNotifications');
 const { signUpSchema, loginSchema, changePasswordSchema } = require('../schemas/auth.schema');
 const { generateToken } = require('../utils/jwt');
+const jwt = require('jsonwebtoken');
 
+function escapeRegex(value = '') {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findUserByEmail(email) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    return userModel.findOne({
+        email: new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i'),
+    });
+}
 
 async function signUp(req, res) {
     try {
         if (!req.body || typeof req.body !== 'object') {
             return res.status(400).json({
                 status: false,
-                message: 'Request body is missing. Send JSON or x-www-form-urlencoded with required fields.'
+                message: 'Request body is missing. Send JSON, form-data, or x-www-form-urlencoded with required fields.'
             });
         }
         const validation = signUpSchema.safeParse(req.body);
 
         if (!validation.success) {
+            console.error('Signup validation failed:', JSON.stringify(validation.error.flatten(), null, 2));
+            console.error('Request body received:', JSON.stringify(req.body, null, 2));
             return res.status(400).json({
                 status: false,
+                message: 'Validation failed',
                 errors: validation.error.flatten()
             });
         }
+        const { firstName, lastName, email, password, confirmPassword, dob, role } = validation.data;
 
-
-
-
-        const { firstName, lastName, email, password, confirmPassword, dob, role } = req.body;
-
-        const existingUser = await userModel.findOne({ email });
+        const existingUser = await findUserByEmail(email);
         if (existingUser) {
             return res.status(400).json({
                 status: false,
-
                 message: "User with this email already exists"
             });
         };
 
-        const user = new userModel({
+        const userData = {
             email: email,
             firstName: firstName,
             lastName: lastName,
             password: password,
             confirmPassword: confirmPassword,
             dob: dob,
-            role: role || 'candidat'
-        });
+            role: role || 'candidat',
+            emailVerified: true,
+        };
+
+        if (req.file) {
+            userData.avatar = `/uploads/${req.file.filename}`;
+        }
+
+        const user = new userModel(userData);
 
         await user.save();
 
-        // send welcome email 
-        const options = {
-            email: user.email,
-            subject: "Welcome to our platform",
-            content: `Hello ${user.firstName},\n\nWelcome to our recruitment platform! We're excited to have you on board.\n\nBest regards,\nThe Team`
-        };
-        try {
-            await sendEmail(options);
-        } catch (mailErr) {
-            console.error('Email sending failed:', mailErr?.message || mailErr);
-            // Do not block user creation due to email issues
-        }
+        const token = generateToken(user._id);
 
         res.status(201).json({
             status: true,
-            message: "User created successfully"
+            message: "User created successfully",
+            token,
+            user: {
+                _id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+            },
         });
 
     }
@@ -91,9 +107,9 @@ async function login(req, res) {
         }
 
         //password and email from req body
-        const { email, password } = req.body;
+        const { email, password } = validation.data;
         // find user by email
-        const user = await userModel.findOne({ email }).select('+password');
+        const user = await findUserByEmail(email).select('+password');
         // cas1: user not found _>return erreur 404
         if (!user) {
             return res.status(400).json({
@@ -130,7 +146,8 @@ async function login(req, res) {
 
 async function getMe(req, res) {
     try {
-        const user = await userModel.findById(req.user.id);
+        const user = await userModel.findById(req.user.id)
+            .populate('companyId', 'name status sector city website approvalNote rejectionReason approvedAt');
         res.status(200).json({
             status: true,
             message: "User found successfully",
@@ -184,7 +201,7 @@ async function changePassword(req, res) {
 }
 async function forgetPassword(req, res) {
     try {
-        const { email } = req.body;
+        const email = String(req.body?.email || '').trim().toLowerCase();
         
         // Validate email format
         if (!email || !email.includes('@')) {
@@ -194,7 +211,7 @@ async function forgetPassword(req, res) {
             });
         }
 
-        const user = await userModel.findOne({ email });
+        const user = await findUserByEmail(email);
         if (!user) {
             // Don't reveal if user exists or not for security
             return res.status(200).json({
@@ -203,23 +220,33 @@ async function forgetPassword(req, res) {
             });
         }
 
-        // Generate reset token (using existing JWT function temporarily)
+        // Generate reset token (JWT)
         const resetToken = generateToken(user._id);
-        
-        // In production, you'd want to:
-        // 1. Generate a secure random token
-        // 2. Hash it and store in database
-        // 3. Set expiration time
-        // 4. Send via email
-        
-        // For demo purposes, we'll simulate sending email
-        console.log(`Password reset token for ${email}: ${resetToken}`);
-        
-        res.status(200).json({
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+
+        // Send reset email (do not fail the request if mail is misconfigured)
+        const options = {
+            email: user.email,
+            subject: 'Réinitialisation du mot de passe',
+            content: `Bonjour ${user.firstName || ''},\n\n` +
+                `Nous avons reçu une demande de réinitialisation de mot de passe.\n\n` +
+                `Cliquez ici pour réinitialiser : ${resetLink}\n\n` +
+                `Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.\n\n` +
+                `Cordialement,\n` +
+                `L'équipe RecruitAI`,
+        };
+
+        try {
+            await sendEmail(options);
+        } catch (mailErr) {
+            // Keep a generic message for security; still log for debugging.
+            console.error('forgetPassword email error:', mailErr?.message || mailErr);
+        }
+
+        return res.status(200).json({
             status: true,
-            message: "If an account exists with this email, you will receive password reset instructions",
-            // In production, don't send token in response
-            debugToken: resetToken // Remove in production
+            message: "If an account exists with this email, you will receive password reset instructions"
         });
     } catch (error) {
         console.error('Forget password error:', error);
@@ -232,10 +259,10 @@ async function forgetPassword(req, res) {
 
 async function resetPassword(req, res) {
     try {
-        const { token, newPassword, confirmPassword } = req.body;
+        const { token: resetToken, newPassword, confirmPassword } = req.body;
         
         // Validate inputs
-        if (!token || !newPassword || !confirmPassword) {
+        if (!resetToken || !newPassword || !confirmPassword) {
             return res.status(400).json({
                 status: false,
                 message: "Token, new password, and confirmation are required"
@@ -249,23 +276,37 @@ async function resetPassword(req, res) {
             });
         }
         
-        if (newPassword.length < 6) {
+        if (newPassword.length < 8) {
             return res.status(400).json({
                 status: false,
-                message: "Password must be at least 6 characters long"
+                message: "Password must be at least 8 characters long"
             });
         }
 
-        // In production, you would:
-        // 1. Verify the token is valid and not expired
-        // 2. Find user by token
-        // 3. Update password
-        // 4. Invalidate the token
-        
-        // For demo, we'll accept any token and update password for user with email
-        // This is NOT secure for production!
-        
-        res.status(200).json({
+        let decoded;
+        try {
+            decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+        } catch (e) {
+            return res.status(400).json({
+                status: false,
+                message: "Invalid or expired reset link"
+            });
+        }
+
+        const user = await userModel.findById(decoded.id);
+        if (!user) {
+            return res.status(400).json({
+                status: false,
+                message: "Invalid reset link"
+            });
+        }
+
+        // Update password (user pre-save hook hashes it)
+        user.password = newPassword;
+        user.confirmPassword = undefined;
+        await user.save();
+
+        return res.status(200).json({
             status: true,
             message: "Password reset successfully"
         });
@@ -278,4 +319,135 @@ async function resetPassword(req, res) {
     }
 }
 
-module.exports = { signUp, login, getMe, changePassword, forgetPassword, resetPassword }
+async function exportMyData(req, res) {
+    try {
+        if (req.user.role !== 'candidat') {
+            return res.status(403).json({ status: false, message: 'Export réservé aux comptes candidat.' });
+        }
+        const user = await userModel.findById(req.user.id).select('-password');
+        const submissions = await Submission.find({ candidateId: req.user._id })
+            .populate('testId', 'title jobRole description')
+            .sort('-createdAt')
+            .lean();
+        res.status(200).json({
+            status: true,
+            exportedAt: new Date().toISOString(),
+            profile: user,
+            submissions,
+        });
+    } catch (error) {
+        res.status(500).json({ status: false, error: error.message });
+    }
+}
+
+async function deleteMyAccountData(req, res) {
+    try {
+        if (req.user.role !== 'candidat') {
+            return res.status(403).json({ status: false, message: 'Réservé aux comptes candidat.' });
+        }
+        if (req.body?.confirm !== 'SUPPRIMER_MON_COMPTE') {
+            return res.status(400).json({
+                status: false,
+                message: 'Envoyez { "confirm": "SUPPRIMER_MON_COMPTE" } pour confirmer la suppression définitive.',
+            });
+        }
+        const uid = req.user.id;
+        await Submission.deleteMany({ candidateId: uid });
+        await TestDraft.deleteMany({ candidateId: uid });
+        await userModel.findByIdAndDelete(uid);
+        res.status(200).json({ status: true, message: 'Compte et données de candidature supprimés.' });
+    } catch (error) {
+        res.status(500).json({ status: false, error: error.message });
+    }
+}
+
+async function patchPreferences(req, res) {
+    try {
+        const user = await userModel.findById(req.user.id);
+        if (!user) return res.status(404).json({ status: false, message: 'User not found' });
+
+        const { notificationPrefs, accessibilityMode } = req.body;
+        if (notificationPrefs && typeof notificationPrefs === 'object') {
+            const currentPrefs = user.notificationPrefs || {};
+            user.notificationPrefs = {
+                emailScoreReady: notificationPrefs.emailScoreReady !== undefined
+                    ? Boolean(notificationPrefs.emailScoreReady)
+                    : currentPrefs.emailScoreReady ?? true,
+                emailHrNewSubmission: notificationPrefs.emailHrNewSubmission !== undefined
+                    ? Boolean(notificationPrefs.emailHrNewSubmission)
+                    : currentPrefs.emailHrNewSubmission ?? true,
+                emailNewJob: notificationPrefs.emailNewJob !== undefined
+                    ? Boolean(notificationPrefs.emailNewJob)
+                    : currentPrefs.emailNewJob ?? true,
+                emailEvents: notificationPrefs.emailEvents !== undefined
+                    ? Boolean(notificationPrefs.emailEvents)
+                    : currentPrefs.emailEvents ?? true,
+                emailApplicationStatus: notificationPrefs.emailApplicationStatus !== undefined
+                    ? Boolean(notificationPrefs.emailApplicationStatus)
+                    : currentPrefs.emailApplicationStatus ?? true,
+                emailInterviewUpdates: notificationPrefs.emailInterviewUpdates !== undefined
+                    ? Boolean(notificationPrefs.emailInterviewUpdates)
+                    : currentPrefs.emailInterviewUpdates ?? true,
+                emailRecommendedJobs: notificationPrefs.emailRecommendedJobs !== undefined
+                    ? Boolean(notificationPrefs.emailRecommendedJobs)
+                    : currentPrefs.emailRecommendedJobs ?? true,
+            };
+        }
+        if (typeof accessibilityMode === 'boolean') {
+            user.accessibilityMode = accessibilityMode;
+        }
+        await user.save();
+        const fresh = await userModel.findById(user._id).select('-password');
+        res.status(200).json({ status: true, user: fresh });
+    } catch (error) {
+        res.status(500).json({ status: false, error: error.message });
+    }
+}
+
+async function getSmtpStatus(req, res) {
+    try {
+        return res.status(200).json({ status: true, connected: smtpConfigured() });
+    } catch (error) {
+        return res.status(500).json({ status: false, error: error.message });
+    }
+}
+
+async function sendSmtpTestEmail(req, res) {
+    try {
+        if (!smtpConfigured()) {
+            return res.status(400).json({ status: false, message: 'SMTP n’est pas configuré sur le serveur.' });
+        }
+
+        const user = await userModel.findById(req.user.id).select('email firstName');
+        if (!user) return res.status(404).json({ status: false, message: 'User not found' });
+
+        const options = {
+            email: user.email,
+            subject: 'Test email SMTP - RecruitAI',
+            content:
+                `Bonjour ${user.firstName || ''},\n\n` +
+                `Ceci est un e-mail de test envoyé via votre configuration SMTP/Gmail côté serveur.\n\n` +
+                `Si vous recevez cet e-mail, les notifications et invitations email sont opérationnelles.\n\n` +
+                `Cordialement,\nL'équipe RecruitAI`,
+        };
+
+        await sendEmail(options);
+        return res.status(200).json({ status: true, message: 'E-mail de test envoyé' });
+    } catch (error) {
+        return res.status(500).json({ status: false, message: error.message || 'Failed to send test email' });
+    }
+}
+
+module.exports = {
+    signUp,
+    login,
+    getMe,
+    changePassword,
+    forgetPassword,
+    resetPassword,
+    patchPreferences,
+    exportMyData,
+    deleteMyAccountData,
+    getSmtpStatus,
+    sendSmtpTestEmail,
+};

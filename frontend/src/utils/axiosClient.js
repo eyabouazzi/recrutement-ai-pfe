@@ -1,6 +1,6 @@
-import { message } from "antd";
 import axios from "axios";
 import errorHandler from "./errorHandler";
+import { clearStoredToken, getStoredToken } from "./authStorage";
 
 const axiosClient = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
@@ -8,7 +8,7 @@ const axiosClient = axios.create({
 
 axiosClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("auth-token");
+        const token = getStoredToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -26,7 +26,7 @@ axiosClient.interceptors.response.use(
     (error) => {
         // Handle authentication errors
         if (error.response?.status === 401) {
-            localStorage.removeItem("auth-token");
+            clearStoredToken();
             if (window.location.pathname !== '/login') {
                 errorHandler.handleApiError(error, 'Authentication');
                 window.location.href = "/login";

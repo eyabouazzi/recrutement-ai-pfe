@@ -4,8 +4,6 @@ import { SearchOutlined, EnvironmentOutlined, ClockCircleOutlined, SolutionOutli
 import { useNavigate } from 'react-router-dom';
 import { getPublicTests } from '../../api/tests';
 import { motion } from 'framer-motion';
-import RealTimeStats from '../../components/RealTimeStats';
-
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
@@ -25,6 +23,8 @@ export default function Careers() {
     const [filters, setFilters] = useState({
         employmentType: [],
         location: [],
+        sector: [],
+        company: '',
         salaryRange: [0, 100000],
         experienceLevel: [],
         sortBy: 'createdAt',
@@ -32,6 +32,7 @@ export default function Careers() {
     });
     
     const [showFilters, setShowFilters] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState('all');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -44,6 +45,9 @@ export default function Careers() {
                     search: searchTerm,
                     employmentType: filters.employmentType,
                     location: filters.location,
+                    sector: filters.sector[0] || '',
+                    company: filters.company,
+                    category: selectedCategory === 'all' ? '' : selectedCategory,
                     minSalary: filters.salaryRange[0],
                     maxSalary: filters.salaryRange[1],
                     sortBy: filters.sortBy,
@@ -70,7 +74,7 @@ export default function Careers() {
         };
         
         fetchJobs();
-    }, [pagination.currentPage, searchTerm, filters]);
+    }, [pagination.currentPage, searchTerm, filters, selectedCategory]);
 
     // Memoized filtered jobs computation
     const filteredJobs = useMemo(() => {
@@ -92,12 +96,18 @@ export default function Careers() {
             // Location filter
             const matchesLocation = filters.location.length === 0 || 
                 filters.location.includes(job.location);
+            const matchesSector = filters.sector.length === 0 ||
+                filters.sector.includes(job.companySector);
+            const matchesCompany = !filters.company ||
+                String(job.companyName || '').toLowerCase().includes(filters.company.toLowerCase());
+
+            const matchesCategory = selectedCategory === 'all' || job.jobRole === selectedCategory;
             
             // Salary range filter
             const jobSalary = parseInt(job.salaryRange?.replace(/[^0-9]/g, '') || '0');
             const matchesSalary = jobSalary >= filters.salaryRange[0] && jobSalary <= filters.salaryRange[1];
             
-            return matchesSearch && isActive && matchesEmploymentType && matchesLocation && matchesSalary;
+            return matchesSearch && isActive && matchesEmploymentType && matchesLocation && matchesSector && matchesCompany && matchesCategory && matchesSalary;
         });
         
         // Sort results
@@ -128,7 +138,14 @@ export default function Careers() {
         });
         
         return result;
-    }, [jobs, searchTerm, filters]);
+    }, [jobs, searchTerm, filters, selectedCategory]);
+
+    const categories = useMemo(() => {
+        const values = Array.from(new Set(jobs.map((job) => job.jobRole).filter(Boolean)));
+        return values.slice(0, 8);
+    }, [jobs]);
+    const sectorOptions = useMemo(() => Array.from(new Set(jobs.map((job) => job.companySector).filter(Boolean))), [jobs]);
+    const companyOptions = useMemo(() => Array.from(new Set(jobs.map((job) => job.companyName).filter(Boolean))), [jobs]);
 
     const featuredJobs = filteredJobs.filter(job => job.featured).slice(0, 3);
     const regularJobs = filteredJobs.filter(job => !job.featured);
@@ -138,31 +155,17 @@ export default function Careers() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
+            className="careers-page wow-public-page"
             style={styles.page}
         >
             {/* Header Section */}
-            <header style={styles.header}>
+            <header className="careers-header" style={styles.header}>
                 <div style={styles.container}>
-                    <motion.div 
-                        initial={{ y: -20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.5 }}
-                        style={styles.brand}
-                    >
-                        <div style={styles.logoBox}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#ffffff" />
-                                <path d="M2 12l10 5 10-5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                        </div>
-                        <span style={styles.brandName}>Recruit AI</span>
-                    </motion.div>
-
                     <motion.div 
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.2, duration: 0.5 }}
-                        style={styles.heroContent}
+                        style={{ ...styles.heroContent, paddingTop: 20 }}
                     >
                         <Badge>We are hiring!</Badge>
                         <Title style={styles.heroTitle}>
@@ -182,6 +185,26 @@ export default function Careers() {
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                             />
+
+                            <div style={styles.categoryBar}>
+                                <Button
+                                    type={selectedCategory === 'all' ? 'primary' : 'default'}
+                                    shape="round"
+                                    onClick={() => setSelectedCategory('all')}
+                                >
+                                    Toutes les catégories
+                                </Button>
+                                {categories.map((category) => (
+                                    <Button
+                                        key={category}
+                                        type={selectedCategory === category ? 'primary' : 'default'}
+                                        shape="round"
+                                        onClick={() => setSelectedCategory(category)}
+                                    >
+                                        {category}
+                                    </Button>
+                                ))}
+                            </div>
                             
                             {/* Advanced Filters Toggle */}
                             <div style={styles.filterToggle}>
@@ -201,6 +224,7 @@ export default function Careers() {
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
+                                className="careers-filters-panel"
                                 style={styles.filtersPanel}
                             >
                                 <Row gutter={[16, 16]}>
@@ -256,6 +280,38 @@ export default function Careers() {
                                     
                                     <Col xs={24} md={12}>
                                         <div style={styles.filterGroup}>
+                                            <Text strong style={styles.filterLabel}>Domaine / secteur</Text>
+                                            <Checkbox.Group
+                                                value={filters.sector}
+                                                onChange={(values) => setFilters({ ...filters, sector: values.slice(0, 1) })}
+                                                style={styles.checkboxGroup}
+                                            >
+                                                {sectorOptions.map((sector) => (
+                                                    <Checkbox key={sector} value={sector}>{sector}</Checkbox>
+                                                ))}
+                                            </Checkbox.Group>
+                                        </div>
+                                    </Col>
+
+                                    <Col xs={24} md={12}>
+                                        <div style={styles.filterGroup}>
+                                            <Text strong style={styles.filterLabel}>Entreprise</Text>
+                                            <Select
+                                                allowClear
+                                                placeholder="Filtrer par entreprise"
+                                                value={filters.company || undefined}
+                                                onChange={(value) => setFilters({ ...filters, company: value || '' })}
+                                                style={{ width: '100%' }}
+                                            >
+                                                {companyOptions.map((company) => (
+                                                    <Option key={company} value={company}>{company}</Option>
+                                                ))}
+                                            </Select>
+                                        </div>
+                                    </Col>
+
+                                    <Col xs={24} md={12}>
+                                        <div style={styles.filterGroup}>
                                             <Text strong style={styles.filterLabel}>Trier par</Text>
                                             <div style={styles.sortControls}>
                                                 <Select
@@ -285,12 +341,15 @@ export default function Careers() {
                                                 setFilters({
                                                     employmentType: [],
                                                     location: [],
+                                                    sector: [],
+                                                    company: '',
                                                     salaryRange: [0, 100000],
                                                     experienceLevel: [],
                                                     sortBy: 'createdAt',
                                                     sortOrder: 'desc'
                                                 });
                                                 setSearchTerm('');
+                                                setSelectedCategory('all');
                                             }}>
                                                 Réinitialiser
                                             </Button>
@@ -306,16 +365,11 @@ export default function Careers() {
                 </div>
             </header>
 
-            {/* Real-time Statistics Section */}
-            <section style={styles.statsSection}>
-                <div style={styles.container}>
-                    <RealTimeStats />
-                </div>
-            </section>
+
 
             {/* Featured Jobs Section */}
             {featuredJobs.length > 0 && (
-                <section style={styles.featuredSection}>
+                <section className="careers-featured" style={styles.featuredSection}>
                     <div style={styles.container}>
                         <Title level={3} style={styles.sectionTitle}>
                             <FireOutlined style={{ marginRight: 12, color: '#f59e0b' }} />
@@ -339,7 +393,7 @@ export default function Careers() {
             )}
 
             {/* Jobs List Section */}
-            <main style={styles.main}>
+            <main className="careers-main" style={styles.main}>
                 <div style={{ ...styles.container, maxWidth: 1200 }}>
                     <div style={styles.listHeader}>
                         <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
@@ -365,6 +419,7 @@ export default function Careers() {
                             </Button>
                         </Empty>
                     ) : (
+                        <>
                         <div style={styles.jobList}>
                             {regularJobs.map(job => (
                                 <motion.div
@@ -409,7 +464,16 @@ export default function Careers() {
                                 </div>
                             </div>
                         )}
+                        </>
                     )}
+                </div>
+                <div style={{ maxWidth: 900, margin: '48px auto 32px', padding: '0 24px' }}>
+                    <Divider />
+                    <Paragraph type="secondary" style={{ fontSize: 13, textAlign: 'center', marginBottom: 0 }}>
+                        Données personnelles : candidater et passer un test implique le traitement de vos informations et de vos
+                        réponses à des fins de recrutement. Les candidats connectés peuvent exercer leurs droits (accès,
+                        effacement) depuis la page « Mes données » de leur espace.
+                    </Paragraph>
                 </div>
             </main>
         </motion.div>
@@ -420,8 +484,9 @@ const JobCard = ({ job }) => {
     const navigate = useNavigate();
     return (
         <Card 
+            className="careers-job-card"
             style={styles.jobCard} 
-            bodyStyle={{ padding: 24 }}
+            styles={{ body: { padding: 24 } }}
             onClick={() => navigate(`/careers/${job._id}`)}
             hoverable
         >
@@ -429,6 +494,7 @@ const JobCard = ({ job }) => {
                 <div style={styles.jobInfo}>
                     <Title level={4} style={styles.jobTitle}>{job.title}</Title>
                     <Text style={styles.jobRole}>{job.jobRole}</Text>
+                    <Text type="secondary">{job.companyName || 'Entreprise partenaire'}</Text>
                     
                     <div style={styles.jobMeta}>
                         <span style={styles.metaItem}>
@@ -461,11 +527,13 @@ const FeaturedJobCard = ({ job }) => {
     
     return (
         <Card 
+            className="careers-featured-card"
             style={styles.featuredCard}
             cover={
                 <div style={styles.featuredCover}>
                     <div style={styles.coverContent}>
                         <Text style={styles.featuredJobRole}>{job.jobRole}</Text>
+                        <Text style={{ color: '#fff' }}>{job.companyName || 'Entreprise partenaire'}</Text>
                         <Tag color="gold" icon={<StarOutlined />}>Vedette</Tag>
                     </div>
                 </div>
@@ -607,6 +675,13 @@ const styles = {
     searchWrap: {
         width: '100%',
         maxWidth: 700,
+    },
+    categoryBar: {
+        display: 'flex',
+        gap: 10,
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        marginBottom: 16,
     },
     searchInput: {
         borderRadius: 99,
@@ -750,4 +825,3 @@ const styles = {
         borderLeft: '1px solid #f1f5f9'
     }
 };
-

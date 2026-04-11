@@ -1,125 +1,214 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Typography, Row, Col } from 'antd';
-import { MailOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Form, Input, Button, Typography, App as AntdApp } from 'antd';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { forgotPassword } from '../api/auth';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MailOutlined, ArrowLeftOutlined, CheckCircleFilled } from '@ant-design/icons';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
-const ForgotPassword = () => {
-    const [form] = Form.useForm();
+function ForgotPassword() {
+    const { message } = AntdApp.useApp();
     const [loading, setLoading] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const navigate = useNavigate();
+    const [isSent, setIsSent] = useState(false);
+    const [email, setEmail] = useState('');
 
-    const onFinish = async (values) => {
+    async function onFinish(values) {
         setLoading(true);
         try {
-            const data = await forgotPassword(values);
-            
-            if (data.status) {
-                message.success(data.message || 'Password reset instructions sent to your email');
-                setSubmitted(true);
-            } else {
-                message.error(data.message || 'Failed to process request');
-            }
-        } catch (error) {
-            console.error('Forgot password error:', error);
-            message.error(error.message || 'Error connecting to server');
+            await forgotPassword({ email: values.email });
+            setEmail(values.email);
+            setIsSent(true);
+        } catch (err) {
+            message.error(err.message || "Échec de l'envoi");
         } finally {
             setLoading(false);
         }
-    };
-
-    if (submitted) {
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4"
-            >
-                <Card className="w-full max-w-md shadow-xl">
-                    <div className="text-center">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                        </div>
-                        <Title level={3} className="mb-4">Check Your Email</Title>
-                        <Text className="text-gray-600 mb-6 block">
-                            We've sent password reset instructions to your email address. 
-                            Please check your inbox and follow the link to reset your password.
-                        </Text>
-                        <Button 
-                            type="primary" 
-                            size="large" 
-                            block
-                            onClick={() => navigate('/login')}
-                        >
-                            Back to Login
-                        </Button>
-                    </div>
-                </Card>
-            </motion.div>
-        );
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4"
-        >
-            <Card className="w-full max-w-md shadow-xl">
-                <div className="text-center mb-8">
-                    <Title level={2} className="mb-2">Reset Password</Title>
-                    <Text type="secondary">
-                        Enter your email address and we'll send you instructions to reset your password
-                    </Text>
-                </div>
+        <div style={styles.page}>
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                style={styles.card}
+            >
+                <Link to="/login" style={styles.backBtn}>
+                    <ArrowLeftOutlined />
+                </Link>
 
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={onFinish}
-                >
-                    <Form.Item
-                        name="email"
-                        rules={[
-                            { required: true, message: 'Please input your email!' },
-                            { type: 'email', message: 'Please enter a valid email!' }
-                        ]}
-                    >
-                        <Input 
-                            prefix={<MailOutlined />} 
-                            placeholder="Email Address" 
-                            size="large"
-                        />
-                    </Form.Item>
-
-                    <Form.Item>
-                        <Button 
-                            type="primary" 
-                            htmlType="submit" 
-                            loading={loading}
-                            size="large" 
-                            block
+                <AnimatePresence mode="wait">
+                    {!isSent ? (
+                        <motion.div
+                            key="form"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
                         >
-                            Send Reset Instructions
-                        </Button>
-                    </Form.Item>
-                </Form>
+                            <div style={styles.header}>
+                                <Title level={2} style={styles.title}>Mot de passe oublié ?</Title>
+                                <Paragraph style={styles.subtitle}>
+                                    Entrez votre adresse e-mail et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+                                </Paragraph>
+                            </div>
 
-                <div className="text-center mt-6">
-                    <Link to="/login" className="text-blue-600 hover:text-blue-800 flex items-center justify-center">
-                        <ArrowLeftOutlined className="mr-2" />
-                        Back to Login
-                    </Link>
-                </div>
-            </Card>
-        </motion.div>
+                            <Form onFinish={onFinish} layout="vertical" requiredMark={false}>
+                                <Form.Item
+                                    name="email"
+                                    label={<span style={styles.label}>Adresse e-mail</span>}
+                                    rules={[
+                                        { required: true, message: 'E-mail requis' },
+                                        { type: 'email', message: 'E-mail invalide' }
+                                    ]}
+                                >
+                                    <Input
+                                        size="large"
+                                        placeholder="nom@entreprise.com"
+                                        prefix={<MailOutlined style={{ color: '#9ca3af' }} />}
+                                        style={styles.input}
+                                        autoFocus
+                                    />
+                                </Form.Item>
+
+                                <Button
+                                    type="primary"
+                                    htmlType="submit"
+                                    size="large"
+                                    loading={loading}
+                                    block
+                                    style={styles.submitBtn}
+                                >
+                                    {loading ? 'Envoi...' : 'Envoyer le lien'}
+                                </Button>
+                            </Form>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="success"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            style={{ textAlign: 'center' }}
+                        >
+                            <div style={styles.successIconBox}>
+                                <CheckCircleFilled style={{ color: '#7c3aed', fontSize: 48 }} />
+                            </div>
+                            <Title level={2} style={styles.title}>Vérifiez vos e-mails</Title>
+                            <Paragraph style={styles.subtitle}>
+                                Nous avons envoyé un lien de réinitialisation à <br />
+                                <strong style={{ color: '#111827' }}>{email}</strong>
+                            </Paragraph>
+
+                            <Button 
+                                block 
+                                size="large" 
+                                style={styles.input}
+                                onClick={() => window.open(`mailto:${email}`)}
+                            >
+                                Ouvrir ma boîte mail
+                            </Button>
+
+                            <div style={styles.footer}>
+                                <Text type="secondary" style={{ fontSize: 14 }}>
+                                    Vous n'avez rien reçu ? {' '}
+                                    <span 
+                                        style={styles.resendLink}
+                                        onClick={() => onFinish({ email })}
+                                    >
+                                        Renvoyer
+                                    </span>
+                                </Text>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.div>
+        </div>
     );
+}
+
+const styles = {
+    page: {
+        display: 'flex',
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f9fafb',
+        fontFamily: "'Inter', sans-serif",
+        padding: '24px',
+    },
+    card: {
+        width: '100%',
+        maxWidth: '440px',
+        background: '#ffffff',
+        padding: '48px',
+        borderRadius: '16px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+        border: '1px solid #e5e7eb',
+        position: 'relative',
+    },
+    backBtn: {
+        position: 'absolute',
+        top: '24px',
+        left: '24px',
+        color: '#6b7280',
+        fontSize: '18px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '36px',
+        height: '36px',
+        borderRadius: '8px',
+        border: '1px solid #e5e7eb',
+        transition: 'all 0.2s ease',
+    },
+    header: {
+        textAlign: 'center',
+        marginBottom: '32px',
+        marginTop: '16px',
+    },
+    title: {
+        fontSize: '28px',
+        fontWeight: 700,
+        color: '#111827',
+        marginBottom: '12px',
+        letterSpacing: '-0.01em',
+    },
+    subtitle: {
+        fontSize: '15px',
+        color: '#4b5563',
+        lineHeight: 1.6,
+    },
+    label: {
+        fontSize: '14px',
+        fontWeight: 600,
+        color: '#374151',
+    },
+    input: {
+        height: '44px',
+        borderRadius: '8px',
+    },
+    submitBtn: {
+        height: '48px',
+        borderRadius: '8px',
+        fontSize: '16px',
+        fontWeight: 600,
+        background: '#7c3aed',
+        border: 'none',
+        marginTop: '8px',
+    },
+    successIconBox: {
+        marginBottom: '24px',
+        marginTop: '16px',
+    },
+    footer: {
+        marginTop: '32px',
+    },
+    resendLink: {
+        color: '#7c3aed',
+        fontWeight: 600,
+        cursor: 'pointer',
+    },
 };
 
 export default ForgotPassword;

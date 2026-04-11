@@ -34,13 +34,13 @@ function CandidateResults() {
             
             // Calculate statistics
             const totalTests = userSubmissions.length;
-            const passedTests = userSubmissions.filter(sub => sub.score >= 50).length;
-            const failedTests = userSubmissions.filter(sub => sub.score < 50).length;
+            const passedTests = userSubmissions.filter(sub => (sub.totalScore ?? 0) >= 50).length;
+            const failedTests = userSubmissions.filter(sub => (sub.totalScore ?? 0) < 50).length;
             const avgScore = totalTests > 0 
-                ? Math.round(userSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / totalTests)
+                ? Math.round(userSubmissions.reduce((sum, sub) => sum + (sub.totalScore || 0), 0) / totalTests)
                 : 0;
             const bestScore = totalTests > 0 
-                ? Math.max(...userSubmissions.map(sub => sub.score || 0))
+                ? Math.max(...userSubmissions.map(sub => sub.totalScore || 0))
                 : 0;
             
             setStats({
@@ -407,6 +407,35 @@ function CandidateResults() {
                                         {selectedDetail.feedback || "Aucun feedback disponible pour ce test."}
                                     </Paragraph>
                                 </div>
+                            </TabPane>
+
+                            <TabPane tab="Par compétence" key="comp">
+                                {(selectedDetail.competencyBreakdown || []).length === 0 ? (
+                                    <Paragraph type="secondary">Non disponible (test uniquement QCM ou évaluation sans détail par compétence).</Paragraph>
+                                ) : (
+                                    <Table
+                                        size="small"
+                                        pagination={false}
+                                        rowKey={(r, i) => `${r.competency}-${i}`}
+                                        dataSource={selectedDetail.competencyBreakdown}
+                                        columns={[
+                                            { title: 'Compétence', dataIndex: 'competency' },
+                                            {
+                                                title: 'Niveau',
+                                                dataIndex: 'score',
+                                                width: 180,
+                                                render: (s) => (
+                                                    <Progress
+                                                        percent={s}
+                                                        size="small"
+                                                        status={s >= 60 ? 'success' : s >= 40 ? 'normal' : 'exception'}
+                                                    />
+                                                ),
+                                            },
+                                            { title: 'Commentaire', dataIndex: 'comment', ellipsis: true },
+                                        ]}
+                                    />
+                                )}
                             </TabPane>
                             
                             <TabPane tab="Détails Techniques" key="2">

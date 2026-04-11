@@ -1,110 +1,163 @@
-import React, { useState } from 'react'
-import { Divider, Form, Input, Button, Select, DatePicker, message, Upload, Avatar } from 'antd'
+import React, { useState } from 'react';
+import { Divider, Form, Input, Button, message, Upload, Avatar, Card, Row, Col, Typography } from 'antd';
 import { UserOutlined, CameraOutlined } from '@ant-design/icons';
 import { uploadFile } from '../api/files';
 import { createUser } from '../api/users';
+import {
+  ValidatedFormItem,
+  ValidatedSelect,
+  ValidatedDatePicker,
+  FormSection,
+  ValidatedSubmitButton,
+} from '../Components/FormComponents';
+import { VALIDATION_RULES } from '../utils/formValidation';
+import { handlePromise, showSuccess, showWarning } from '../utils/errorHandler';
+
+const { Title } = Typography;
+
 const AddUser = () => {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
   const [AvatarFile, setAvatarFile] = useState(null);
   const [previewAvatar, setPreviewAvatar] = useState(null);
+
+  const roles = [
+    { value: 'user', label: 'User' },
+    { value: 'admin', label: 'Administrator' },
+  ];
+
   const beforeUpload = (file) => {
     setAvatarFile(file);
     setPreviewAvatar(URL.createObjectURL(file));
     return false;
-  }
+  };
 
-  async function onFinish(values) {
+  const handleSubmit = async (values) => {
+    setLoading(true);
     try {
-      //upload file
       let avatarFilename = null;
       if (AvatarFile) {
-
         const uploadRes = await uploadFile(AvatarFile);
         avatarFilename = uploadRes.file.fileName;
       }
-      const data = await createUser(values, avatarFilename);
-      message.success(data.message);
-    } catch (error) {
-      message.error(error.message || "somthing went wrong ");
+
+      await handlePromise(
+        createUser(values, avatarFilename),
+        'User Creation',
+        (result) => {
+          showSuccess(result?.message || 'User created successfully!');
+          form.resetFields();
+          setAvatarFile(null);
+          setPreviewAvatar(null);
+        },
+        (error, errorMessage) => {
+          showWarning(errorMessage);
+        }
+      );
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const validateConfirmPassword = ({ getFieldValue }) => ({
+    validator(_, value) {
+      if (!value || getFieldValue('password') === value) return Promise.resolve();
+      return Promise.reject(new Error('Passwords do not match'));
+    },
+  });
 
   return (
-    <div>
-      <h4>Create User</h4>
-      <Divider />
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: '20px' }}>
-        <Avatar size={80} src={previewAvatar || undefined}
-          icon={!previewAvatar && <UserOutlined />} />
+    <Card style={{ maxWidth: 880, margin: '0 auto' }}>
+      <Title level={3} style={{ marginBottom: 18 }}>
+        Create New User
+      </Title>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 16,
+          marginBottom: 20,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Avatar size={80} src={previewAvatar || undefined} icon={!previewAvatar && <UserOutlined />} />
 
         <Upload beforeUpload={beforeUpload} showUploadList={false} accept="image/*">
-          <Button icon={<CameraOutlined />}>
-            {previewAvatar ? "Change Picture" : "Upload Picture"}
-          </Button>
+          <Button icon={<CameraOutlined />}>{previewAvatar ? 'Change Picture' : 'Upload Picture'}</Button>
         </Upload>
       </div>
-      <Form onFinish={onFinish}
-        layout="vertical"
 
-      >
-        <Form.Item
-          label='FirstName'
-          name='firstName'
-          rules={[{ required: true, message: 'Please enter your first name' }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item
-          label='LastName'
-          name='lastName'
-          rules={[{ required: true, message: 'Please enter your last name' }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item
-          label='Email'
-          name='email'
-          rules={[{ required: true, message: 'Please enter your email' }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item
-          label='Password'
-          name='password'
-          rules={[{ required: true, message: 'Password is required' }]}>
-          <Input.Password />
-        </Form.Item>
+      <Divider />
 
+      <Form form={form} layout="vertical" onFinish={handleSubmit} autoComplete="off">
+        <FormSection title="Personal Information" description="Basic information about the user">
+          <Row gutter={16}>
+            <Col span={12}>
+              <ValidatedFormItem name="firstName" label="First Name" type="name" required />
+            </Col>
+            <Col span={12}>
+              <ValidatedFormItem name="lastName" label="Last Name" type="name" required />
+            </Col>
+          </Row>
 
-        <Form.Item
-          label='ConfirmPassword'
-          name='confirmPassword'
-          rules={[{ required: true, message: 'Confirme Password is required' }]}>
-          <Input.Password />
-        </Form.Item>
-        <Form.Item
-          label='Date of birth'
-          name='dob'
-          rules={[{ required: true, message: 'Date of birth is required' }]}>
-          <DatePicker style={{ width: "100%" }} />
-        </Form.Item>
+          <ValidatedFormItem name="email" label="Email Address" type="email" required />
+          <ValidatedDatePicker name="dob" label="Date of Birth" required />
+        </FormSection>
 
+        <FormSection title="Account Settings" description="Configure user account and permissions">
+          <ValidatedSelect
+            name="role"
+            label="Role"
+            options={roles}
+            required
+            placeholder="Select user role"
+          />
 
-        <Form.Item
-          label='Account type'
-          name='role'
-          rules={[{ required: true, message: 'Role is required' }]}>
-          <Select placeholder="Select a role">
-            <Select.Option value="admin">Admin</Select.Option>
-            <Select.Option value="user">User</Select.Option>
-          </Select>
-        </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ValidatedFormItem
+                name="password"
+                label="Password"
+                type="password"
+                required
+                rules={[VALIDATION_RULES.password.min(8), VALIDATION_RULES.password.strength()]}
+              />
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="confirmPassword"
+                label="Confirm Password"
+                dependencies={['password']}
+                rules={[VALIDATION_RULES.required('Please confirm your password'), validateConfirmPassword]}
+              >
+                <Input.Password placeholder="Confirm password" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </FormSection>
 
-
-        <Form.Item>
-          <Button type='primary' htmlType='submit'>
-            Create User
+        <Form.Item style={{ textAlign: 'right', marginTop: 24 }}>
+          <Button
+            type="default"
+            onClick={() => {
+              form.resetFields();
+              setAvatarFile(null);
+              setPreviewAvatar(null);
+            }}
+            style={{ marginRight: 12 }}
+            disabled={loading}
+          >
+            Reset
           </Button>
+          <ValidatedSubmitButton form={form} loading={loading}>
+            Create User
+          </ValidatedSubmitButton>
         </Form.Item>
       </Form>
-    </div>
-  )
-}
+    </Card>
+  );
+};
 
-export default AddUser
+export default AddUser;

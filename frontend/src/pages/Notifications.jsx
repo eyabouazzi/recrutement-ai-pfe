@@ -1,82 +1,261 @@
-import { useState, useEffect } from 'react';
-import { Card, List, Avatar, Badge, Button, Typography, Space, Tag, Switch, Divider } from 'antd';
-import { BellOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ClockCircleOutlined, SettingOutlined, DeleteOutlined, SoundOutlined } from '@ant-design/icons';
+import { useState, useEffect, useCallback } from 'react';
+import {
+    Card,
+    List,
+    Avatar,
+    Badge,
+    Button,
+    Typography,
+    Space,
+    Tag,
+    Switch,
+    Divider,
+    Row,
+    Col,
+    message,
+} from 'antd';
+import {
+    BellOutlined,
+    CheckCircleOutlined,
+    ExclamationCircleOutlined,
+    ClockCircleOutlined,
+    SettingOutlined,
+    DeleteOutlined,
+    SoundOutlined,
+} from '@ant-design/icons';
 import { motion } from 'framer-motion';
+import { useWebSocket } from '../contexts/WebSocketContext';
+import {
+    getNotifications as getNotificationsApi,
+    markAsRead as markAsReadApi,
+    markAllAsRead as markAllAsReadApi,
+    deleteNotification as deleteNotificationApi,
+} from '../api/appNotification';
 
 const { Title, Text } = Typography;
 
-function Notifications() {
-    const [notifications, setNotifications] = useState([
-        {
-            id: 1,
-            type: 'success',
-            title: 'Test complété avec succès',
-            message: 'Votre test "Développeur Full Stack" a été évalué. Score: 85%',
-            time: 'Il y a 2 heures',
-            read: false,
-            icon: <CheckCircleOutlined />
-        },
-        {
-            id: 2,
-            type: 'warning',
-            title: 'Nouvelle opportunité',
-            message: 'Un nouveau test "Data Scientist" est disponible dans votre domaine',
-            time: 'Il y a 4 heures',
-            read: false,
-            icon: <ExclamationCircleOutlined />
-        },
-        {
-            id: 3,
-            type: 'info',
-            title: 'Rappel d\'entretien',
-            message: 'Entretien avec l\'équipe technique demain à 14h00',
-            time: 'Il y a 1 jour',
-            read: true,
-            icon: <ClockCircleOutlined />
-        },
-        {
-            id: 4,
-            type: 'success',
-            title: 'Profil mis à jour',
-            message: 'Votre profil a été mis à jour avec succès',
-            time: 'Il y a 2 jours',
-            read: true,
-            icon: <CheckCircleOutlined />
+const isObjectIdLike = (value) => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
+
+const toUiType = (rawType) => {
+    switch (rawType) {
+        case 'SUBMISSION_CREATED':
+        case 'score_ready':
+        case 'success':
+        case 'INTERVIEW_SCHEDULED':
+        case 'NEW_MATCH_RECOMMENDATION':
+            return 'success';
+        case 'warning':
+            return 'warning';
+        case 'error':
+            return 'error';
+        default:
+            return 'info';
+    }
+};
+
+const toDefaultTitle = (rawType) => {
+    switch (rawType) {
+        case 'SUBMISSION_CREATED':
+            return 'Test termine';
+        case 'APPLICATION_STATUS_CHANGED':
+            return 'Statut mis a jour';
+        case 'CANDIDATE_SUBMITTED':
+            return 'Nouvelle soumission';
+        case 'INTERVIEW_SCHEDULED':
+            return 'Entretien programme';
+        case 'NEW_MATCH_RECOMMENDATION':
+            return 'Nouveau match';
+        case 'score_ready':
+            return 'Score disponible';
+        default:
+            return 'Notification';
+    }
+};
+
+const toDefaultMessage = (rawType, notification) => {
+    if (rawType === 'SUBMISSION_CREATED') {
+        const testTitle = notification?.data?.testTitle || 'Test';
+        const score = notification?.data?.score != null ? `${notification.data.score}%` : 'n/a';
+        return `Le test "${testTitle}" est termine. Score: ${score}`;
+    }
+    if (rawType === 'APPLICATION_STATUS_CHANGED') {
+        return 'Votre candidature a ete mise a jour.';
+    }
+    if (rawType === 'CANDIDATE_SUBMITTED') {
+        const testTitle = notification?.data?.testTitle || 'Test';
+        return `Un candidat a termine "${testTitle}".`;
+    }
+    if (rawType === 'INTERVIEW_SCHEDULED') {
+        return 'Un entretien a ete planifie pour votre candidature.';
+    }
+    if (rawType === 'NEW_MATCH_RECOMMENDATION') {
+        const testTitle = notification?.data?.testTitle || 'Opportunite';
+        const score = notification?.data?.score != null ? `${notification.data.score}%` : '';
+        return score ? `"${testTitle}" correspond a votre profil (${score}).` : `"${testTitle}" correspond a votre profil.`;
+    }
+    return '';
+};
+
+const toIcon = (uiType) => {
+    switch (uiType) {
+        case 'success':
+            return <CheckCircleOutlined />;
+        case 'warning':
+        case 'error':
+            return <ExclamationCircleOutlined />;
+        default:
+            return <ClockCircleOutlined />;
+    }
+};
+
+const normalizeNotification = (notification, idx = 0) => {
+    const rawType = String(notification?.type || 'general');
+    const uiType = toUiType(rawType);
+
+    const rawDate = notification?.createdAt || notification?.timestamp;
+    const date = rawDate ? new Date(rawDate) : null;
+    const isValidDate = date && !Number.isNaN(date.getTime());
+    const timestampMs = isValidDate ? date.getTime() : Date.now();
+    const time = isValidDate ? date.toLocaleString() : '';
+
+    const fromId = notification?._id ? String(notification._id) : null;
+    const fromAliasId = notification?.id ? String(notification.id) : null;
+    const backendId = fromId || (isObjectIdLike(fromAliasId) ? fromAliasId : null);
+    const id = backendId || fromAliasId || `${rawType}-${timestampMs}-${idx}`;
+
+    return {
+        id,
+        backendId,
+        rawType,
+        type: uiType,
+        title: notification?.title || toDefaultTitle(rawType),
+        message: notification?.message || toDefaultMessage(rawType, notification),
+        time,
+        timestampMs,
+        read: Boolean(notification?.read),
+        icon: toIcon(uiType),
+    };
+};
+
+const mergeNotifications = (current, incoming) => {
+    const byId = new Map(current.map((item) => [item.id, item]));
+
+    incoming.forEach((item) => {
+        const existing = byId.get(item.id);
+        if (existing) {
+            byId.set(item.id, {
+                ...item,
+                backendId: item.backendId || existing.backendId,
+                read: existing.read || item.read,
+            });
+            return;
         }
-    ]);
+        byId.set(item.id, item);
+    });
+
+    return Array.from(byId.values()).sort((a, b) => b.timestampMs - a.timestampMs);
+};
+
+function Notifications() {
+    const { notifications: liveNotifications, clearNotifications } = useWebSocket();
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [emailEnabled, setEmailEnabled] = useState(true);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const loadNotifications = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await getNotificationsApi({ page: 1, limit: 100 });
+            if (!response?.status) {
+                throw new Error(response?.message || response?.error || 'Chargement impossible');
+            }
 
-    const markAsRead = (id) => {
-        setNotifications(notifications.map(notification => 
-            notification.id === id 
-                ? { ...notification, read: true }
-                : notification
-        ));
+            const normalized = (response.notifications || []).map((item, idx) => normalizeNotification(item, idx));
+            setNotifications((prev) => mergeNotifications(prev, normalized));
+        } catch (error) {
+            message.error(error.message || 'Impossible de charger les notifications');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadNotifications();
+    }, [loadNotifications]);
+
+    useEffect(() => {
+        if (!Array.isArray(liveNotifications) || liveNotifications.length === 0) return;
+        const normalizedLive = liveNotifications.map((item, idx) => normalizeNotification(item, idx));
+        setNotifications((prev) => mergeNotifications(prev, normalizedLive));
+    }, [liveNotifications]);
+
+    const unreadCount = notifications.filter((notification) => !notification.read).length;
+
+    const markAsRead = async (id) => {
+        const target = notifications.find((item) => item.id === id);
+        if (!target || target.read) return;
+
+        setNotifications((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, read: true } : item))
+        );
+
+        if (target.backendId) {
+            const response = await markAsReadApi(target.backendId);
+            if (!response?.status) {
+                message.error(response?.message || response?.error || 'Action impossible');
+            }
+        }
     };
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(notification => 
-            ({ ...notification, read: true })
-        ));
+    const markAllAsRead = async () => {
+        setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+
+        const hasPersistent = notifications.some((item) => item.backendId);
+        if (!hasPersistent) return;
+
+        const response = await markAllAsReadApi();
+        if (!response?.status) {
+            message.error(response?.message || response?.error || 'Action impossible');
+        }
     };
 
-    const deleteNotification = (id) => {
-        setNotifications(notifications.filter(n => n.id !== id));
+    const deleteNotification = async (id) => {
+        const target = notifications.find((item) => item.id === id);
+
+        setNotifications((prev) => prev.filter((item) => item.id !== id));
+
+        if (target?.backendId) {
+            const response = await deleteNotificationApi(target.backendId);
+            if (!response?.status) {
+                message.error(response?.message || response?.error || 'Suppression impossible');
+            }
+        }
     };
 
-    const clearAll = () => {
+    const clearAll = async () => {
+        const backendIds = notifications
+            .map((item) => item.backendId)
+            .filter(Boolean);
+
+        if (backendIds.length > 0) {
+            await Promise.allSettled(backendIds.map((id) => deleteNotificationApi(id)));
+        }
+
         setNotifications([]);
+        clearNotifications();
     };
 
     const getNotificationColor = (type) => {
         switch (type) {
-            case 'success': return '#10b981';
-            case 'warning': return '#f59e0b';
-            case 'error': return '#ef4444';
-            default: return '#3b82f6';
+            case 'success':
+                return '#10b981';
+            case 'warning':
+                return '#f59e0b';
+            case 'error':
+                return '#ef4444';
+            default:
+                return '#3b82f6';
         }
     };
 
@@ -87,7 +266,6 @@ function Notifications() {
             transition={{ duration: 0.5 }}
             style={styles.container}
         >
-            {/* Header */}
             <motion.div
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -107,18 +285,10 @@ function Notifications() {
                         </div>
                     </div>
                     <div style={styles.actions}>
-                        <Button 
-                            type="primary" 
-                            onClick={markAllAsRead}
-                            disabled={unreadCount === 0}
-                        >
+                        <Button type="primary" onClick={markAllAsRead} disabled={unreadCount === 0}>
                             Tout marquer comme lu
                         </Button>
-                        <Button 
-                            icon={<DeleteOutlined />} 
-                            onClick={clearAll}
-                            danger
-                        >
+                        <Button icon={<DeleteOutlined />} onClick={clearAll} danger>
                             Tout supprimer
                         </Button>
                     </div>
@@ -127,7 +297,6 @@ function Notifications() {
 
             <div style={styles.content}>
                 <Row gutter={24}>
-                    {/* Notifications List */}
                     <Col xs={24} lg={16}>
                         <motion.div
                             initial={{ x: -20, opacity: 0 }}
@@ -136,36 +305,37 @@ function Notifications() {
                         >
                             <Card style={styles.notificationsCard}>
                                 <List
+                                    loading={loading}
                                     dataSource={notifications}
-                                    renderItem={notification => (
+                                    renderItem={(notificationItem) => (
                                         <List.Item
                                             style={{
                                                 ...styles.notificationItem,
-                                                background: notification.read ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
-                                                borderLeft: notification.read ? 'none' : `4px solid ${getNotificationColor(notification.type)}`
+                                                background: notificationItem.read ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
+                                                borderLeft: notificationItem.read
+                                                    ? 'none'
+                                                    : `4px solid ${getNotificationColor(notificationItem.type)}`,
                                             }}
                                         >
                                             <List.Item.Meta
                                                 avatar={
-                                                    <Avatar 
-                                                        icon={notification.icon}
+                                                    <Avatar
+                                                        icon={notificationItem.icon}
                                                         style={{
-                                                            backgroundColor: notification.read 
-                                                                ? '#e2e8f0' 
-                                                                : getNotificationColor(notification.type),
-                                                            color: notification.read ? '#94a3b8' : 'white'
+                                                            backgroundColor: notificationItem.read
+                                                                ? '#e2e8f0'
+                                                                : getNotificationColor(notificationItem.type),
+                                                            color: notificationItem.read ? '#94a3b8' : 'white',
                                                         }}
                                                     />
                                                 }
                                                 title={
                                                     <div style={styles.notificationHeader}>
-                                                        <Text strong style={{
-                                                            color: notification.read ? '#64748b' : '#1e293b'
-                                                        }}>
-                                                            {notification.title}
+                                                        <Text strong style={{ color: notificationItem.read ? '#64748b' : '#1e293b' }}>
+                                                            {notificationItem.title}
                                                         </Text>
-                                                        {!notification.read && (
-                                                            <Tag color={getNotificationColor(notification.type)} style={styles.tag}>
+                                                        {!notificationItem.read && (
+                                                            <Tag color={getNotificationColor(notificationItem.type)} style={styles.tag}>
                                                                 Nouveau
                                                             </Tag>
                                                         )}
@@ -173,30 +343,28 @@ function Notifications() {
                                                 }
                                                 description={
                                                     <div>
-                                                        <Text style={{
-                                                            color: notification.read ? '#94a3b8' : '#64748b'
-                                                        }}>
-                                                            {notification.message}
+                                                        <Text style={{ color: notificationItem.read ? '#94a3b8' : '#64748b' }}>
+                                                            {notificationItem.message}
                                                         </Text>
                                                         <div style={styles.notificationFooter}>
                                                             <Text type="secondary" style={styles.time}>
-                                                                {notification.time}
+                                                                {notificationItem.time}
                                                             </Text>
                                                             <Space>
-                                                                {!notification.read && (
-                                                                    <Button 
-                                                                        type="link" 
+                                                                {!notificationItem.read && (
+                                                                    <Button
+                                                                        type="link"
                                                                         size="small"
-                                                                        onClick={() => markAsRead(notification.id)}
+                                                                        onClick={() => markAsRead(notificationItem.id)}
                                                                     >
                                                                         Marquer comme lu
                                                                     </Button>
                                                                 )}
-                                                                <Button 
-                                                                    type="link" 
+                                                                <Button
+                                                                    type="link"
                                                                     size="small"
                                                                     icon={<DeleteOutlined />}
-                                                                    onClick={() => deleteNotification(notification.id)}
+                                                                    onClick={() => deleteNotification(notificationItem.id)}
                                                                     danger
                                                                 />
                                                             </Space>
@@ -207,15 +375,15 @@ function Notifications() {
                                         </List.Item>
                                     )}
                                 />
-                                
-                                {notifications.length === 0 && (
+
+                                {!loading && notifications.length === 0 && (
                                     <div style={styles.emptyState}>
                                         <BellOutlined style={styles.emptyIcon} />
                                         <Title level={4} style={{ color: '#6b7280', marginBottom: 8 }}>
                                             Aucune notification
                                         </Title>
                                         <Text type="secondary">
-                                            Vous êtes à jour ! Les nouvelles notifications apparaîtront ici.
+                                            Vous etes a jour. Les nouvelles notifications apparaitront ici.
                                         </Text>
                                     </div>
                                 )}
@@ -223,18 +391,17 @@ function Notifications() {
                         </motion.div>
                     </Col>
 
-                    {/* Settings Panel */}
                     <Col xs={24} lg={8}>
                         <motion.div
                             initial={{ x: 20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.3, duration: 0.5 }}
                         >
-                            <Card 
+                            <Card
                                 title={
                                     <div style={styles.settingsTitle}>
                                         <SettingOutlined style={{ marginRight: 8 }} />
-                                        Paramètres
+                                        Parametres
                                     </div>
                                 }
                                 style={styles.settingsCard}
@@ -243,37 +410,34 @@ function Notifications() {
                                     <div>
                                         <Text strong>Notifications sonores</Text>
                                         <br />
-                                        <Text type="secondary">Émettre un son lors de nouvelles notifications</Text>
+                                        <Text type="secondary">Emettre un son lors de nouvelles notifications</Text>
                                     </div>
-                                    <Switch 
+                                    <Switch
                                         checked={soundEnabled}
                                         onChange={setSoundEnabled}
                                         checkedChildren={<SoundOutlined />}
                                     />
                                 </div>
-                                
+
                                 <Divider style={{ margin: '16px 0' }} />
-                                
+
                                 <div style={styles.settingItem}>
                                     <div>
                                         <Text strong>Notifications par email</Text>
                                         <br />
                                         <Text type="secondary">Recevoir les notifications importantes par email</Text>
                                     </div>
-                                    <Switch 
-                                        checked={emailEnabled}
-                                        onChange={setEmailEnabled}
-                                    />
+                                    <Switch checked={emailEnabled} onChange={setEmailEnabled} />
                                 </div>
-                                
+
                                 <Divider style={{ margin: '16px 0' }} />
-                                
+
                                 <div style={styles.settingItem}>
                                     <div>
                                         <Text strong>Filtrer par type</Text>
                                         <br />
                                         <Space style={{ marginTop: 8 }}>
-                                            <Tag color="success">Succès</Tag>
+                                            <Tag color="success">Succes</Tag>
                                             <Tag color="warning">Avertissements</Tag>
                                             <Tag color="blue">Informations</Tag>
                                         </Space>
@@ -291,95 +455,95 @@ function Notifications() {
 const styles = {
     container: {
         padding: 24,
-        fontFamily: "'Inter', sans-serif"
+        fontFamily: "'Inter', sans-serif",
     },
     header: {
-        marginBottom: 32
+        marginBottom: 32,
     },
     headerContent: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 20
+        gap: 20,
     },
     titleSection: {
         display: 'flex',
         alignItems: 'center',
-        gap: 16
+        gap: 16,
     },
     bellIcon: {
         fontSize: 32,
-        color: '#3b82f6'
+        color: '#3b82f6',
     },
     title: {
         margin: 0,
-        color: '#1e293b'
+        color: '#1e293b',
     },
     actions: {
         display: 'flex',
         gap: 12,
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
     },
     content: {
-        marginTop: 24
+        marginTop: 24,
     },
     notificationsCard: {
         borderRadius: 16,
         boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-        border: '1px solid #f1f5f9'
+        border: '1px solid #f1f5f9',
     },
     notificationItem: {
         padding: '20px 16px',
         borderRadius: 12,
         marginBottom: 12,
-        transition: 'all 0.2s ease'
+        transition: 'all 0.2s ease',
     },
     notificationHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8
+        marginBottom: 8,
     },
     tag: {
         fontSize: 10,
-        padding: '2px 8px'
+        padding: '2px 8px',
     },
     notificationFooter: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 12
+        marginTop: 12,
     },
     time: {
-        fontSize: 12
+        fontSize: 12,
     },
     emptyState: {
         textAlign: 'center',
-        padding: 40
+        padding: 40,
     },
     emptyIcon: {
         fontSize: 48,
         color: '#d1d5db',
-        marginBottom: 16
+        marginBottom: 16,
     },
     settingsCard: {
         borderRadius: 16,
         boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
         border: '1px solid #f1f5f9',
-        height: 'fit-content'
+        height: 'fit-content',
     },
     settingsTitle: {
         fontSize: 16,
         fontWeight: 600,
         display: 'flex',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     settingItem: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start'
-    }
+        alignItems: 'flex-start',
+    },
 };
 
 export default Notifications;

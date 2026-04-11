@@ -1,3 +1,4 @@
+import React from 'react';
 import { Form } from 'antd';
 import { useState, useCallback, useEffect } from 'react';
 
@@ -219,23 +220,32 @@ export function RealTimeValidator({ fieldName, rules, children }) {
 // Validation summary component
 export function ValidationSummary({ errors }) {
     if (!errors || Object.keys(errors).length === 0) return null;
-    
-    return (
-        <div style={{ 
-            backgroundColor: '#fef2f2', 
-            border: '1px solid #fecaca', 
-            borderRadius: '6px', 
-            padding: '12px', 
-            marginBottom: '16px' 
-        }}>
-            <h4 style={{ color: '#dc2626', margin: '0 0 8px 0' }}>Please fix the following errors:</h4>
-            <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                {Object.entries(errors).map(([field, fieldErrors]) => (
-                    <li key={field} style={{ color: '#dc2626', marginBottom: '4px' }}>
-                        <strong>{field}:</strong> {fieldErrors.join(', ')}
-                    </li>
-                ))}
-            </ul>
-        </div>
+    const containerStyle = {
+        backgroundColor: '#fef2f2',
+        border: '1px solid #fecaca',
+        borderRadius: '6px',
+        padding: '12px',
+        marginBottom: '16px',
+    };
+    const titleStyle = { color: '#dc2626', margin: '0 0 8px 0' };
+    const listStyle = { margin: 0, paddingLeft: '20px' };
+    const itemStyle = { color: '#dc2626', marginBottom: '4px' };
+
+    return React.createElement(
+        'div',
+        { style: containerStyle },
+        React.createElement('h4', { style: titleStyle }, 'Please fix the following errors:'),
+        React.createElement(
+            'ul',
+            { style: listStyle },
+            Object.entries(errors).map(([field, fieldErrors]) =>
+                React.createElement(
+                    'li',
+                    { key: field, style: itemStyle },
+                    React.createElement('strong', null, `${field}: `),
+                    (fieldErrors || []).join(', ')
+                )
+            )
+        )
     );
 }

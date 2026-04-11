@@ -1,18 +1,44 @@
 const skillRecommender = require('../utils/skillRecommender');
 const Recommendation = require('../models/recommendation.model');
-const Test = require('../models/test.model');
 const Submission = require('../models/submission.model');
+
+function toClientRecommendation(item) {
+    if (!item) return null;
+    const base = typeof item.toObject === 'function' ? item.toObject() : { ...item };
+    const populatedTest = base.test || (
+        base.testId && typeof base.testId === 'object' ? base.testId : null
+    );
+    if (populatedTest) {
+        base.test = populatedTest;
+        base._id = base._id || populatedTest._id;
+        base.title = base.title || populatedTest.title;
+        base.jobRole = base.jobRole || populatedTest.jobRole;
+        base.description = base.description || populatedTest.description;
+        base.location = base.location || populatedTest.location;
+        base.type = base.type || populatedTest.employmentType;
+    }
+    base.matchScore = base.matchScore || base.score || 0;
+    base.requiredSkills = Array.isArray(base.requiredSkills)
+        ? base.requiredSkills
+        : Array.from(new Set([...(base.matchedSkills || []), ...(base.missingSkills || [])]));
+    base.skills = Array.isArray(base.skills) ? base.skills : base.matchedSkills || [];
+    return base;
+}
 
 // Generate recommendations for authenticated user
 async function generateRecommendations(req, res) {
     try {
         const userId = req.user.id;
-        const recommendations = await skillRecommender.generateRecommendations(userId);
-        
+        await skillRecommender.generateRecommendations(userId, { notifyTopMatches: true });
+        const recommendations = await skillRecommender.getRecommendationsForUser(userId, {
+            autoGenerate: false,
+            refreshIfStale: false,
+        });
+
         res.status(200).json({
             status: true,
             message: 'Recommendations generated successfully',
-            recommendations
+            recommendations: recommendations.map((item) => toClientRecommendation(item)),
         });
     } catch (error) {
         res.status(500).json({ status: false, error: error.message });
@@ -23,25 +49,21 @@ async function generateRecommendations(req, res) {
 async function getRecommendations(req, res) {
     try {
         const userId = req.user.id;
-        const recommendations = await skillRecommender.getRecommendationsForUser(userId);
-        
-        // Populate test details
-        const populatedRecs = await Promise.all(
-            recommendations.map(async (rec) => {
-                if (rec.testId) {
-                    const test = await Test.findById(rec.testId);
-                    return {
-                        ...rec.toObject(),
-                        test
-                    };
-                }
-                return rec;
-            })
-        );
-        
+        const recommendationDoc = await skillRecommender.getRecommendationDocument(userId, {
+            autoGenerate: true,
+            refreshIfStale: true,
+            notifyTopMatches: false,
+        });
+        const recommendations = recommendationDoc?.recommendedTests || [];
+
         res.status(200).json({
             status: true,
-            recommendations: populatedRecs
+            recommendations: recommendations.map((item) => toClientRecommendation(item)),
+            meta: {
+                algorithmVersion: recommendationDoc?.algorithmVersion || null,
+                lastUpdated: recommendationDoc?.lastUpdated || null,
+                stats: recommendationDoc?.stats || {},
+            },
         });
     } catch (error) {
         res.status(500).json({ status: false, error: error.message });
@@ -52,12 +74,16 @@ async function getRecommendations(req, res) {
 async function refreshRecommendations(req, res) {
     try {
         const userId = req.user.id;
-        const recommendations = await skillRecommender.refreshRecommendations(userId);
-        
+        await skillRecommender.refreshRecommendations(userId, { notifyTopMatches: true });
+        const recommendations = await skillRecommender.getRecommendationsForUser(userId, {
+            autoGenerate: false,
+            refreshIfStale: false,
+        });
+
         res.status(200).json({
             status: true,
             message: 'Recommendations refreshed successfully',
-            recommendations
+            recommendations: recommendations.map((item) => toClientRecommendation(item)),
         });
     } catch (error) {
         res.status(500).json({ status: false, error: error.message });
@@ -68,10 +94,10 @@ async function refreshRecommendations(req, res) {
 async function getProfileInsights(req, res) {
     try {
         const userId = req.user.id;
-        
-        const recommendation = await Recommendation.findOne({ userId });
+
+        const recommendation = await Recommendation.findOne({ userId }).sort({ lastUpdated: -1 });
         const submissions = await Submission.find({ candidateId: userId }).populate('testId');
-        
+
         if (!recommendation && submissions.length === 0) {
             return res.status(200).json({
                 status: true,
@@ -85,15 +111,15 @@ async function getProfileInsights(req, res) {
                 }
             });
         }
-        
+
         const userProfile = recommendation ? recommendation.userProfile : { skills: [], experienceLevel: 'Junior' };
-        
+
         // Calculate stats
         const totalSubmissions = submissions.length;
-        const averageScore = totalSubmissions > 0 
+        const averageScore = totalSubmissions > 0
             ? Math.round(submissions.reduce((sum, s) => sum + s.totalScore, 0) / totalSubmissions)
             : 0;
-        
+
         // Get top skills based on scores
         const skillScores = {};
         submissions.forEach(sub => {
@@ -103,12 +129,12 @@ async function getProfileInsights(req, res) {
                     if (!skillScores[skill]) {
                         skillScores[skill] = { total: 0, count: 0 };
                     }
-                    skillScores[skill].total += sub.totalScore;
+                    skillScores[skill].total += Number(sub.totalScore || 0);
                     skillScores[skill].count += 1;
                 });
             }
         });
-        
+
         const topSkills = Object.entries(skillScores)
             .map(([skill, data]) => ({
                 skill,
@@ -116,7 +142,7 @@ async function getProfileInsights(req, res) {
             }))
             .sort((a, b) => b.avgScore - a.avgScore)
             .slice(0, 5);
-        
+
         // Identify improvement areas
         const improvementAreas = Object.entries(skillScores)
             .map(([skill, data]) => ({
@@ -126,7 +152,7 @@ async function getProfileInsights(req, res) {
             .sort((a, b) => a.avgScore - b.avgScore)
             .slice(0, 3)
             .filter(s => s.avgScore < 70);
-        
+
         res.status(200).json({
             status: true,
             insights: {
@@ -135,7 +161,8 @@ async function getProfileInsights(req, res) {
                 totalSubmissions,
                 averageScore,
                 topSkills,
-                improvementAreas
+                improvementAreas,
+                recommendationStats: recommendation?.stats || {},
             }
         });
     } catch (error) {

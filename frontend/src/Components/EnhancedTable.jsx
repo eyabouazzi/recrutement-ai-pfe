@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Table, Input, Button, Space, Tag, Dropdown, Menu } from 'antd';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import { motion } from 'framer-motion';
@@ -39,8 +39,8 @@ export function EnhancedTable({
         }));
     }, [data]);
 
-    // Handle search results from AdvancedSearch
-    const handleSearchResults = (results) => {
+    // Handle search results from AdvancedSearch — stable ref to prevent infinite loop
+    const handleSearchResults = useCallback((results) => {
         setFilteredData(results);
         setTablePagination(prev => ({
             ...prev,
@@ -48,7 +48,7 @@ export function EnhancedTable({
             current: 1
         }));
         if (onSearch) onSearch(results);
-    };
+    }, [onSearch]);
 
     // Enhanced columns with actions
     const enhancedColumns = [

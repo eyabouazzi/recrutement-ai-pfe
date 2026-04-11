@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { uploadFile } from '../api/files';
 import { updateUser } from '../api/users';
 import { CameraOutlined, UserOutlined } from '@ant-design/icons';
+import { getAvatarUrl } from '../utils/avatar.js';
 
 const EditUserDrawer = (props) => {
     const [form] = Form.useForm();
@@ -73,7 +74,7 @@ const EditUserDrawer = (props) => {
                 width={400}
             >
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: '20px' }}>
-                    <Avatar size={80} src={previewAvatar || avatar && `http://localhost:3000/uploads/${avatar}` || undefined}
+                    <Avatar size={80} src={previewAvatar || getAvatarUrl(avatar) || undefined}
                         icon={!previewAvatar && !avatar && <UserOutlined style={{ fontSize: '40px' }} />} />
 
                     <Upload beforeUpload={beforeUpload} showUploadList={false} accept="image/*">

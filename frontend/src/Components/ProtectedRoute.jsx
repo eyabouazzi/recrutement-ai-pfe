@@ -1,13 +1,14 @@
 import { useContext } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthContext } from '../contexts/authContext';
 import { Spin } from 'antd';
 
 const ProtectedRoute = ({ allowedRoles }) => {
     const { token, user } = useContext(AuthContext);
+    const location = useLocation();
 
     if (!token) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
     if (!user) {
@@ -21,6 +22,8 @@ const ProtectedRoute = ({ allowedRoles }) => {
             return <Navigate to="/rh/dashboard" replace />;
         } else if (user.role === 'candidat') {
             return <Navigate to="/tests" replace />;
+        } else if (user.role === 'admin') {
+            return <Navigate to="/admin" replace />;
         }
         return <Navigate to="/" replace />;
     }

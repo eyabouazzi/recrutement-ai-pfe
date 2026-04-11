@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import EditUserDrawer from '../Components/EditUserDrawer';
 import { UserOutlined } from '@ant-design/icons';
 import { listUsers } from '../api/users';
+import { getAvatarUrl } from '../utils/avatar.js';
 
 const UsersList = () => {
   const [users, setUsers] = useState([]);
@@ -17,7 +18,7 @@ const UsersList = () => {
       key: 'avatar',
       render: (avatar) => (
         <Avatar
-          src={avatar ? `http://localhost:3000/uploads/${avatar}` : undefined}
+          src={getAvatarUrl(avatar) || undefined}
           icon={!avatar && <UserOutlined />}
         />
       ),

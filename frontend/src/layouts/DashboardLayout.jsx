@@ -2,6 +2,10 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useContext, useState } from 'react';
 import { AuthContext } from '../contexts/authContext';
 import { useDarkMode } from '../contexts/DarkModeContext';
+import UserAvatar from '../Components/UserAvatar.jsx';
+import ChatWidget from '../Components/ChatWidget.jsx';
+import { clearStoredToken } from '../utils/authStorage';
+import { useWebSocket } from '../contexts/WebSocketContext.jsx';
 
 /* ── Icon components defined FIRST so NAV array can reference them ── */
 function IcoDashboard() {
@@ -39,11 +43,19 @@ function IcoNotifications() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
 }
 
+function IcoAudit() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>;
+}
+
 const NAV = [
   { path: '/rh/dashboard', label: 'Tableau de bord', icon: IcoDashboard },
   { path: '/rh/pipeline', label: 'Pipeline de Recrutement', icon: IcoPipeline },
   { path: '/rh/tests', label: "Offres d'emploi", icon: IcoTests },
+  { path: '/rh/question-bank', label: 'Banque de questions', icon: IcoTests },
+  { path: '/rh/calendar', label: 'Calendrier', icon: IcoCalendar },
+  { path: '/rh/notifications', label: 'Notifications', icon: IcoNotifications },
   { path: '/rh/resultats', label: 'Résultats', icon: IcoResults },
+  { path: '/rh/audit-activite', label: 'Journal soumissions', icon: IcoAudit },
   { path: '/rh/profile', label: 'Profil', icon: IcoProfile },
   { path: '/rh/parametres', label: 'Paramètres', icon: IcoSettings },
   { path: '/rh/exports', label: 'Exports', icon: IcoExport },
@@ -57,23 +69,38 @@ function DashboardLayout() {
   const navigate = useNavigate();
   const { user, setToken, setUser } = useContext(AuthContext);
   const { darkMode, toggleDarkMode } = useDarkMode();
+  const { unreadCount } = useWebSocket();
+  const notificationCount = unreadCount;
 
   const handleLogout = () => {
     setToken(null); setUser(null);
-    localStorage.removeItem('auth-token');
+    clearStoredToken();
     navigate('/login');
   };
-
-  const initials = user
-    ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || 'RH'
-    : 'RH';
 
   const currentPage = NAV.find(n => location.pathname.startsWith(n.path));
 
   return (
-    <div style={s.root}>
+    <div style={{
+      display: 'flex',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0c1626 0%, #103450 60%, #0f766e 120%)',
+      position: 'relative',
+    }} className="wow-hr-shell">
       {/* ── SIDEBAR ── */}
-      <aside style={{ ...s.sidebar, width: collapsed ? 70 : 236 }}>
+      <aside className="modern-sidebar" style={{
+        width: collapsed ? 70 : 236,
+        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        zIndex: 30,
+      }}>
         {/* Brand */}
         <div style={s.brand}>
           <div style={s.brandIcon}>
@@ -99,12 +126,7 @@ function DashboardLayout() {
                 key={item.path}
                 to={item.path}
                 title={collapsed ? item.label : undefined}
-                style={{
-                  ...s.navItem,
-                  ...(active ? s.navItemActive : {}),
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  padding: collapsed ? '10px 0' : '9px 14px',
-                }}
+                className={`modern-nav-item ${active ? 'active' : ''}`}
               >
                 <span style={{ color: active ? 'var(--purple)' : 'var(--text-muted)', flexShrink: 0 }}>
                   <Icon />
@@ -123,7 +145,7 @@ function DashboardLayout() {
             padding: collapsed ? '12px 0' : '12px 14px',
             justifyContent: collapsed ? 'center' : 'flex-start',
           }}>
-            <div style={s.userAvatar}>{initials}</div>
+            <UserAvatar user={user} size={38} />
             {!collapsed && (
               <div>
                 <div style={s.userName}>{user?.firstName} {user?.lastName}</div>
@@ -144,12 +166,19 @@ function DashboardLayout() {
       </aside>
 
       {/* ── MAIN ── */}
-      <div style={s.main}>
+      <div className="dashboard-content wow-dashboard-content" style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        overflowY: 'auto',
+        height: '100vh',
+      }}>
         {/* Topbar */}
-        <header style={s.topbar}>
+        <header className="dashboard-header">
           <div>
-            <h1 style={s.pageTitle}>{currentPage?.label ?? 'Tableau de bord'}</h1>
-            <p style={s.breadcrumb}>
+            <h1 className="dashboard-title">{currentPage?.label ?? 'Tableau de bord'}</h1>
+            <p className="dashboard-subtitle">
               Recruit AI &rsaquo; {currentPage?.label ?? 'Dashboard'}
             </p>
           </div>
@@ -167,18 +196,22 @@ function DashboardLayout() {
             </div>
 
             {/* Notification */}
-            <button style={s.iconBtn} title="Notifications">
+            <button
+              className="notification-badge"
+              data-count={notificationCount}
+              title="Notifications"
+              onClick={() => navigate('/rh/notifications')}
+            >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              <span style={s.badge} />
             </button>
 
             {/* Avatar menu */}
             <div style={{ position: 'relative' }}>
               <button style={s.avatarBtn} onClick={() => setUserMenuOpen(v => !v)}>
-                <div style={s.topAvatar}>{initials}</div>
+                <UserAvatar user={user} size={32} />
                 <span style={s.avatarName}>{user?.firstName || 'RH'}</span>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="6,9 12,15 18,9" />
@@ -186,9 +219,9 @@ function DashboardLayout() {
               </button>
 
               {userMenuOpen && (
-                <div style={s.dropdown}>
+                <div className="dashboard-modal" style={{ position: 'absolute', top: 64, right: 0, width: 280, padding: 0 }}>
                   <div style={s.dropHeader}>
-                    <div style={s.dropLargeAvatar}>{initials}</div>
+                    <UserAvatar user={user} size={52} />
                     <div>
                       <div style={s.dropName}>{user?.firstName} {user?.lastName}</div>
                       <div style={s.dropEmail}>{user?.email}</div>
@@ -210,10 +243,11 @@ function DashboardLayout() {
         </header>
 
         {/* Page content */}
-        <main style={s.content}>
+        <main className="wow-dashboard-main" style={{ flex: 1, padding: '32px 40px', overflowY: 'auto' }}>
           <Outlet />
         </main>
       </div>
+      <ChatWidget />
     </div>
   );
 }

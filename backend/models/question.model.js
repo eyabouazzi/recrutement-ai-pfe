@@ -10,7 +10,7 @@ const questionSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['QCM', 'TEXT'],
+        enum: ['QCM', 'TEXT', 'SHORT_ANSWER', 'PROBLEM'],
         default: 'TEXT',
     },
     prompt: {
@@ -22,6 +22,11 @@ const questionSchema = new mongoose.Schema({
     },
     correctAnswer: {
         type: String, // Correct answer for QCM
+    },
+    /** Marquée comme relue par le RH avant publication forte (optionnel) */
+    reviewedForPublish: {
+        type: Boolean,
+        default: false,
     },
 }, { timestamps: true });
 

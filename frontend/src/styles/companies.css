@@ -1,0 +1,155 @@
+/* ════════════════════════════════════════════════════════════════════════╗
+   ║  COMPANIES PAGE — Enhanced Vibrant Design                            ║
+   ╚═══════════════════════════════════════════════════════════════════════ */
+
+.companies-page {
+  overflow-x: hidden;
+}
+
+/* Hero Animations */
+@keyframes meshFloat {
+  0% { filter: hue-rotate(0deg) saturate(1.2) brightness(1); transform: scale(1); }
+  100% { filter: hue-rotate(25deg) saturate(1.4) brightness(1.1); transform: scale(1.05); }
+}
+
+@keyframes particleFloat {
+  0% { background-position: 0 0, 40px 60px, 80px 20px, 120px 80px, 60px 100px; }
+  50% { background-position: 100px 50px, 140px 110px, 180px 70px, 220px 130px, 160px 150px; }
+  100% { background-position: 200px 100px, 240px 160px, 280px 120px, 320px 180px, 260px 200px; }
+}
+
+/* Company Card Hover Effects */
+.company-card-animated {
+  position: relative;
+  overflow: hidden;
+}
+
+.company-card-animated::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent,
+    rgba(139, 92, 246, 0.08),
+    transparent 30%
+  );
+  animation: cardRotate 8s linear infinite;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.company-card-animated:hover::before {
+  opacity: 1;
+}
+
+@keyframes cardRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.company-card-animated:hover {
+  box-shadow: 
+    0 20px 60px rgba(139, 92, 246, 0.15),
+    0 0 0 1px rgba(139, 92, 246, 0.2) !important;
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Featured Cards */
+.ant-card[class*="featuredCard"] {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ant-card[class*="featuredCard"]:hover {
+  transform: translateY(-8px) scale(1.05);
+  box-shadow: 0 16px 48px rgba(139, 92, 246, 0.25);
+}
+
+/* Search Input Enhancement */
+.ant-input-outlined:focus {
+  border-color: #a78bfa !important;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1) !important;
+}
+
+/* Filter Selects */
+.ant-select-outlined:focus .ant-select-selector {
+  border-color: #a78bfa !important;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1) !important;
+}
+
+/* Tags Animation */
+.ant-tag {
+  transition: all 0.2s;
+}
+
+.ant-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Loading State */
+.ant-spin-blur {
+  border-radius: 16px;
+}
+
+/* Modal Enhancements */
+.ant-modal-header {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(6, 182, 212, 0.05));
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+}
+
+.ant-modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 32px !important;
+  }
+  
+  .filters-row {
+    flex-direction: column;
+  }
+  
+  .filters-row .ant-select {
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+  
+  .stats-row {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
+  .stat-divider {
+    display: none;
+  }
+}
+
+/* Grid/List View Transitions */
+.row {
+  transition: all 0.3s;
+}
+
+/* Custom Scrollbar */
+.companies-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.companies-page::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.companies-page::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #a78bfa, #06b6d4);
+  border-radius: 4px;
+}
+
+.companies-page::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #8b5cf6, #0891b2);
+}

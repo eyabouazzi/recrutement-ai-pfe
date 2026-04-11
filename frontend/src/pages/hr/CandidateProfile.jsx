@@ -1,13 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Button, Avatar, Typography, Tag, Divider, Spin, message, Input, List, Timeline, Tabs } from 'antd';
-import { UserOutlined, ArrowLeftOutlined, MailOutlined, BankOutlined, ClockCircleOutlined, SendOutlined, CheckCircleOutlined, RobotOutlined } from '@ant-design/icons';
-import { fetchSubmissionDetails, addCandidateNote, updateSubmissionStage } from '../../api/submissions';
+import { Card, Button, Avatar, Typography, Tag, Divider, Spin, message, Input, List, Timeline, Tabs, DatePicker, Progress } from 'antd';
+import { UserOutlined, ArrowLeftOutlined, MailOutlined, BankOutlined, ClockCircleOutlined, SendOutlined, CheckCircleOutlined, RobotOutlined, DownloadOutlined, CalendarOutlined } from '@ant-design/icons';
+import { fetchSubmissionDetails, addCandidateNote, updateSubmissionStage, updateSubmissionPipeline } from '../../api/submissions';
 import dayjs from 'dayjs';
+import { getAvatarUrl } from '../../utils/avatar.js';
+import { baseUrl } from '../../api/api.js';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
+
+const ANOMALY_LABELS = {
+    FAST_COMPLETION: 'Passage tres rapide',
+    MANY_BLANK: 'Beaucoup de reponses vides',
+    IDENTICAL_OPEN_ANSWERS: 'Reponses ouvertes identiques',
+    LOW_ANSWER_COVERAGE: 'Faible couverture des questions',
+    DUPLICATE_QUESTION_IDS: 'Questions dupliquees dans la soumission',
+    HIGH_FOCUS_LOSS: 'Nombreux changements d\'onglet/focus',
+    EXCESSIVE_PASTE: 'Collage excessif',
+    HIGH_COPY_ACTIVITY: 'Copie frequente',
+    FULLSCREEN_EXITS: 'Sorties du plein ecran',
+    CLIENT_CLOCK_MISMATCH: 'Horodatage client incoherent',
+    DEVICE_SWITCH: 'Changement d\'appareil/IP',
+};
 
 const STAGES = [
     { id: 'NEW', title: 'Nouveau', color: 'blue' },
@@ -25,6 +41,9 @@ export default function CandidateProfile() {
     const [loading, setLoading] = useState(true);
     const [noteText, setNoteText] = useState('');
     const [submittingNote, setSubmittingNote] = useState(false);
+    const [interviewAt, setInterviewAt] = useState(null);
+    const [followUp, setFollowUp] = useState('');
+    const [savingPipeline, setSavingPipeline] = useState(false);
 
     useEffect(() => {
         loadDetails();
@@ -35,6 +54,9 @@ export default function CandidateProfile() {
             setLoading(true);
             const data = await fetchSubmissionDetails(id);
             setSubmission(data.submission);
+            const s = data.submission;
+            setInterviewAt(s.interviewScheduledAt ? dayjs(s.interviewScheduledAt) : null);
+            setFollowUp(s.followUpNotes || '');
         } catch (error) {
             message.error(error.message);
             navigate('/rh/pipeline');
@@ -71,6 +93,47 @@ export default function CandidateProfile() {
         }
     };
 
+    const handleSavePipeline = async () => {
+        try {
+            setSavingPipeline(true);
+            await updateSubmissionPipeline(id, {
+                interviewScheduledAt: interviewAt ? interviewAt.toISOString() : null,
+                followUpNotes: followUp,
+            });
+            message.success('Suivi enregistré');
+        } catch (error) {
+            message.error(error.message);
+        } finally {
+            setSavingPipeline(false);
+        }
+    };
+
+    const exportDossierTxt = () => {
+        const c = submission.candidateId || {};
+        const t = submission.testId || {};
+        const lines = [
+            `DOSSIER CANDIDAT — ${c.firstName || ''} ${c.lastName || ''}`,
+            `Email: ${c.email || ''}`,
+            `Test: ${t.title || ''} (${t.jobRole || ''})`,
+            `Score: ${submission.totalScore ?? '—'} / 100`,
+            `Qualifié (seuil): ${submission.qualified ? 'oui' : 'non'}`,
+            `Date: ${dayjs(submission.createdAt).format('DD/MM/YYYY HH:mm')}`,
+            '',
+            '--- Feedback ---',
+            submission.feedback || '—',
+            '',
+            '--- Compétences ---',
+            ...(submission.competencyBreakdown || []).map((x) => `${x.competency}: ${x.score} — ${x.comment}`),
+        ];
+        const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dossier_${c.lastName || 'candidat'}_${id}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     if (loading) {
         return <div style={{ display: 'flex', justifyContent: 'center', padding: 100 }}><Spin size="large" /></div>;
     }
@@ -78,13 +141,23 @@ export default function CandidateProfile() {
     const candidate = submission.candidateId || {};
     const test = submission.testId || {};
     const stageInfo = STAGES.find(s => s.id === submission.stage) || STAGES[0];
+    const cvAnalysis = candidate.cvAnalysis || {};
+    const detectedSkillItems = Array.isArray(cvAnalysis.detectedSkills) && cvAnalysis.detectedSkills.length > 0
+        ? cvAnalysis.detectedSkills
+        : (candidate.skills || []);
+    const cvDownloadUrl = candidate.cvUrl
+        ? (candidate.cvUrl.startsWith('http://') || candidate.cvUrl.startsWith('https://')
+            ? candidate.cvUrl
+            : `${baseUrl}${candidate.cvUrl}`)
+        : '';
 
     return (
         <div style={styles.page}>
             {/* Header / Top Action Bar */}
-            <div style={styles.actionBar}>
+                <div style={styles.actionBar}>
                 <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/rh/pipeline')}>Retour au Pipeline</Button>
-                <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <Button icon={<DownloadOutlined />} onClick={exportDossierTxt}>Exporter dossier (.txt)</Button>
                     <Tag color={stageInfo.color} style={{ fontSize: 14, padding: '4px 12px', borderRadius: 99 }}>{stageInfo.title}</Tag>
                 </div>
             </div>
@@ -94,7 +167,7 @@ export default function CandidateProfile() {
                 <div style={styles.leftCol}>
                     <Card style={styles.profileCard}>
                         <div style={styles.avatarWrap}>
-                            <Avatar size={100} icon={<UserOutlined />} src={candidate.avatar} style={{ backgroundColor: '#2563eb' }} />
+                            <Avatar size={100} icon={<UserOutlined />} src={getAvatarUrl(candidate.avatar)} style={{ backgroundColor: '#2563eb' }} />
                         </div>
                         <Title level={3} style={{ textAlign: 'center', marginBottom: 4 }}>
                             {candidate.firstName} {candidate.lastName}
@@ -140,6 +213,150 @@ export default function CandidateProfile() {
                         </div>
                     </Card>
 
+                    <Card
+                        title={<><CalendarOutlined /> Entretien & suivi RH</>}
+                        style={{ marginTop: 24 }}
+                        extra={
+                            <Button type="primary" size="small" loading={savingPipeline} onClick={handleSavePipeline}>
+                                Enregistrer
+                            </Button>
+                        }
+                    >
+                        <Text type="secondary" block style={{ marginBottom: 8 }}>
+                            Planification et notes internes (non visibles du candidat).
+                        </Text>
+                        <div style={{ marginBottom: 16 }}>
+                            <Text strong>Date d&apos;entretien prévue</Text>
+                            <DatePicker
+                                showTime
+                                style={{ width: '100%', marginTop: 8 }}
+                                value={interviewAt}
+                                onChange={setInterviewAt}
+                                format="DD/MM/YYYY HH:mm"
+                            />
+                        </div>
+                        <div>
+                            <Text strong>Relance / notes de suivi</Text>
+                            <TextArea
+                                rows={4}
+                                style={{ marginTop: 8 }}
+                                value={followUp}
+                                onChange={(e) => setFollowUp(e.target.value)}
+                                placeholder="Ex: relance LinkedIn, points à creuser..."
+                            />
+                        </div>
+                        {submission.testId?.calendlyUrl && (
+                            <Button
+                                type="link"
+                                href={submission.testId.calendlyUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ paddingLeft: 0, marginTop: 8 }}
+                            >
+                                Ouvrir Calendly de l&apos;offre
+                            </Button>
+                        )}
+                    </Card>
+
+                    <Card
+                        title={<><RobotOutlined /> Analyse sémantique du CV</>}
+                        style={{ marginTop: 24 }}
+                        extra={cvDownloadUrl ? (
+                            <Button
+                                size="small"
+                                icon={<DownloadOutlined />}
+                                href={cvDownloadUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                CV
+                            </Button>
+                        ) : null}
+                    >
+                        <Text type="secondary" block style={{ marginBottom: 12 }}>
+                            Lecture automatique du profil candidat à partir du CV et des informations renseignées.
+                        </Text>
+
+                        {candidate.bio && (
+                            <Paragraph style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                                {candidate.bio}
+                            </Paragraph>
+                        )}
+
+                        <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                            {candidate.education && (
+                                <Text><strong>Formation :</strong> {candidate.education}</Text>
+                            )}
+                            {candidate.experienceYears !== undefined && candidate.experienceYears !== null && (
+                                <Text><strong>Expérience :</strong> {candidate.experienceYears} an(s)</Text>
+                            )}
+                            {candidate.preferredSector && (
+                                <Text><strong>Secteur visé :</strong> {candidate.preferredSector}</Text>
+                            )}
+                            {candidate.preferredLocation && (
+                                <Text><strong>Localisation visée :</strong> {candidate.preferredLocation}</Text>
+                            )}
+                        </div>
+
+                        {cvAnalysis.summary ? (
+                            <Paragraph style={{ background: '#eff6ff', padding: 12, borderRadius: 8 }}>
+                                {cvAnalysis.summary}
+                            </Paragraph>
+                        ) : (
+                            <Text type="secondary">Aucune analyse CV disponible pour le moment.</Text>
+                        )}
+
+                        <Divider style={{ margin: '16px 0' }} />
+
+                        <div style={{ marginBottom: 16 }}>
+                            <Text strong>Compétences détectées</Text>
+                            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {detectedSkillItems.length > 0 ? (
+                                    detectedSkillItems.map((skill) => (
+                                        <Tag key={skill} color="green">{skill}</Tag>
+                                    ))
+                                ) : (
+                                    <Text type="secondary">Aucune compétence détectée.</Text>
+                                )}
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: 16 }}>
+                            <Text strong>Rôles suggérés</Text>
+                            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {(cvAnalysis.suggestedRoles || []).length > 0 ? (
+                                    cvAnalysis.suggestedRoles.map((role) => (
+                                        <Tag key={role} color="blue">{role}</Tag>
+                                    ))
+                                ) : (
+                                    <Text type="secondary">Aucun rôle suggéré.</Text>
+                                )}
+                            </div>
+                        </div>
+
+                        {cvAnalysis.strengths?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>Points forts</Text>
+                                <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                                    {cvAnalysis.strengths.map((item) => (
+                                        <li key={item} style={{ marginBottom: 6 }}>{item}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {cvAnalysis.recommendations?.length > 0 && (
+                            <div>
+                                <Text strong>Axes d’attention</Text>
+                                <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                                    {cvAnalysis.recommendations.map((item) => (
+                                        <li key={item} style={{ marginBottom: 6 }}>{item}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </Card>
+
                     <Card title={<><RobotOutlined /> Score AI & Feedback</>} style={{ marginTop: 24 }}>
                         <div style={{ textAlign: 'center', marginBottom: 16 }}>
                             <div style={{ ...styles.scoreBadge, color: submission.totalScore > 70 ? '#059669' : '#d97706' }}>
@@ -147,6 +364,43 @@ export default function CandidateProfile() {
                             </div>
                             <Text strong>Compatibilité Globale</Text>
                         </div>
+                        {typeof submission.trustScore === 'number' && (
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>Score de confiance anti-triche</Text>
+                                <Progress
+                                    percent={submission.trustScore}
+                                    status={submission.trustScore >= 80 ? 'success' : submission.trustScore >= 60 ? 'normal' : 'exception'}
+                                    strokeColor={submission.trustScore >= 80 ? '#52c41a' : submission.trustScore >= 60 ? '#faad14' : '#ff4d4f'}
+                                    style={{ marginTop: 8 }}
+                                />
+                            </div>
+                        )}
+                        {submission.behaviorData && (
+                            <div style={{ marginBottom: 16, background: '#fafafa', padding: 12, borderRadius: 8 }}>
+                                <Text strong>Données comportementales</Text>
+                                <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
+                                    <Text>Onglets/focus: {submission.behaviorData.tabSwitches || 0} switch(es), {submission.behaviorData.focusLossCount || 0} perte(s) de focus</Text>
+                                    <Text>Copier/coller: {submission.behaviorData.copyCount || 0} copie(s), {submission.behaviorData.pasteCount || 0} collage(s)</Text>
+                                    <Text>Plein écran: {submission.behaviorData.fullscreenExits || 0} sortie(s)</Text>
+                                    {submission.behaviorData.deviceFingerprint?.userAgent && (
+                                        <Text type="secondary">Device: {submission.behaviorData.deviceFingerprint.userAgent.slice(0, 80)}</Text>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {submission.anomalyFlags?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>Signaux automatiques</Text>
+                                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {submission.anomalyFlags.map((f, i) => (
+                                        <Tag key={i} color={f.severity === 'high' ? 'red' : f.severity === 'medium' ? 'orange' : 'gold'}>
+                                            {ANOMALY_LABELS[f.code] || f.code}
+                                            {f.detail ? ` — ${f.detail}` : ''}
+                                        </Tag>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <Paragraph style={{ fontStyle: 'italic', background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                             "{submission.feedback}"
                         </Paragraph>
@@ -213,7 +467,7 @@ export default function CandidateProfile() {
                                                 children: (
                                                     <div style={styles.timelineItem}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                            <Avatar size="small" src={note.author?.avatar} icon={<UserOutlined />} />
+                                                            <Avatar size="small" src={getAvatarUrl(note.author?.avatar)} icon={<UserOutlined />} />
                                                             <Text strong>{note.author?.firstName} {note.author?.lastName}</Text>
                                                         </div>
                                                         <Paragraph style={{ margin: 0, paddingLeft: 32 }}>{note.text}</Paragraph>
@@ -389,3 +643,4 @@ const styles = {
         lineHeight: 1.6
     }
 };
+

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Typography, Card, Tag, Row, Col, Spin, Empty, Button, message, Steps, Statistic, List, Avatar, Space, Divider } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { getMyApplications } from '../../api/submissions';
+import { listMyInterviews } from '../../api/interviews';
 import { ClockCircleOutlined, SolutionOutlined, RightOutlined, CheckCircleOutlined, CloseCircleOutlined, UserOutlined, CalendarOutlined, BarChartOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
@@ -20,6 +21,7 @@ const STAGE_MAP = {
 export default function MyApplications() {
     const [apps, setApps] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [interviews, setInterviews] = useState([]);
     const [stats, setStats] = useState({
         total: 0,
         active: 0,
@@ -30,6 +32,7 @@ export default function MyApplications() {
 
     useEffect(() => {
         fetchApps();
+        fetchInterviews();
     }, []);
 
     const fetchApps = async () => {
@@ -58,6 +61,32 @@ export default function MyApplications() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchInterviews = async () => {
+        try {
+            const data = await listMyInterviews();
+            setInterviews(data.interviews || []);
+        } catch (error) {
+            // Interview display is a nice-to-have for this page; don't block the whole UI.
+            console.error('Error fetching interviews:', error);
+        }
+    };
+
+    const getInterviewForApp = (app) => {
+        const testId = app?.testId?._id || app?.testId;
+        if (!testId || interviews.length === 0) return null;
+
+        const matches = interviews.filter((it) => String(it?.testId?._id || it?.testId) === String(testId));
+        if (matches.length === 0) return null;
+
+        // Prefer upcoming scheduled interviews.
+        const now = new Date();
+        const upcoming = matches.find((it) => it.status === 'SCHEDULED' && new Date(it.scheduledAt) >= now);
+        if (upcoming) return upcoming;
+
+        // Otherwise show the most recent one.
+        return matches.slice().sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt))[0] || null;
     };
 
     const getStageProgress = (stage) => {
@@ -230,6 +259,51 @@ export default function MyApplications() {
                                                                     <ClockCircleOutlined style={{ marginRight: 4 }} />
                                                                     Postulé le {dayjs(app.createdAt).format('DD MMMM YYYY')}
                                                                 </Text>
+
+                                                                {app.stage === 'INTERVIEW' && (
+                                                                    <>
+                                                                        {(() => {
+                                                                            const interview = getInterviewForApp(app);
+                                                                            if (!interview) {
+                                                                                return (
+                                                                                    <div style={{ marginTop: 10, padding: '10px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
+                                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                                            <CalendarOutlined style={{ marginRight: 6 }} />
+                                                                                            Entretien en attente de planification.
+                                                                                        </Text>
+                                                                                    </div>
+                                                                                );
+                                                                            }
+
+                                                                            const scheduledAt = interview.scheduledAt ? dayjs(interview.scheduledAt) : null;
+                                                                            const statusLabel =
+                                                                                interview.status === 'SCHEDULED' ? 'Confirmé' :
+                                                                                    interview.status === 'COMPLETED' ? 'Terminé' :
+                                                                                        interview.status === 'CANCELLED' ? 'Annulé' : 'Entretien';
+                                                                            const tagColor =
+                                                                                interview.status === 'SCHEDULED' ? 'cyan' :
+                                                                                    interview.status === 'COMPLETED' ? 'green' :
+                                                                                        interview.status === 'CANCELLED' ? 'red' : 'blue';
+
+                                                                            return (
+                                                                                <div style={{ marginTop: 10, padding: '10px 12px', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8 }}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                                                                                        <Text type="secondary" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                                            <CalendarOutlined />
+                                                                                            {scheduledAt ? `${scheduledAt.format('DD MMMM YYYY')} à ${scheduledAt.format('HH:mm')}` : 'Date inconnue'}
+                                                                                        </Text>
+                                                                                        <Tag color={tagColor}>{statusLabel}</Tag>
+                                                                                    </div>
+                                                                                    <div style={{ marginTop: 6 }}>
+                                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                                            Type : {interview.type === 'onsite' ? 'Sur place' : interview.type === 'phone' ? 'Téléphone' : 'Visio'}
+                                                                                        </Text>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })()}
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         }
                                                     />

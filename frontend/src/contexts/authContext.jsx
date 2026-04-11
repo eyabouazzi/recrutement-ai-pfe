@@ -1,22 +1,23 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useContext } from "react";
 import { getMe } from "../api/auth";
+import { clearStoredToken, getStoredToken, syncStoredToken } from "../utils/authStorage";
 const AuthContext = createContext(null);
 
 // Also export as a named export so it can be imported with `{ AuthContext }`
 export { AuthContext };
 
 export const AuthProvider = ({ children }) => {
-    const [token, setToken] = useState(localStorage.getItem('auth-token') || null);
+    const [token, setToken] = useState(getStoredToken);
     const [user, setUser] = useState(null);
     useEffect(() => {
         async function fetchMe() {
             if (!token) {
                 setUser(null);
-                localStorage.removeItem('auth-token');
+                clearStoredToken();
                 return;
             }
             try {
-                localStorage.setItem('auth-token', token);
+                syncStoredToken(token);
                 const data = await getMe();
                 if (data.status) {
                     setUser(data.user);
@@ -24,13 +25,13 @@ export const AuthProvider = ({ children }) => {
                     // Token might be invalid
                     setToken(null);
                     setUser(null);
-                    localStorage.removeItem('auth-token');
+                    clearStoredToken();
                 }
             } catch (error) {
                 console.error('Error fetching user:', error);
                 setToken(null);
                 setUser(null);
-                localStorage.removeItem('auth-token');
+                clearStoredToken();
             }
         }
         fetchMe();
@@ -43,3 +44,6 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthContext;
+
+// Convenience hook — used by WebSocketContext and others
+export const useAuth = () => useContext(AuthContext);

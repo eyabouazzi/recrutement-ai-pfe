@@ -5,6 +5,7 @@ import { fetchAllSubmissions, updateSubmissionStage } from '../../api/submission
 import { message, Spin, Avatar, Tag, Tooltip, Button } from 'antd';
 import { UserOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { getAvatarUrl } from '../../utils/avatar.js';
 
 const STAGES = [
     { id: 'NEW', title: 'Nouveau', color: '#3b82f6', bg: '#eff6ff' },
@@ -152,7 +153,7 @@ export default function Pipeline() {
                                                             }}
                                                         >
                                                             <div style={styles.cardHeader}>
-                                                                <Avatar size={32} icon={<UserOutlined />} src={candidate.candidateId?.avatar} style={{ backgroundColor: '#2563eb' }} />
+                                                                <Avatar size={32} icon={<UserOutlined />} src={getAvatarUrl(candidate.candidateId?.avatar)} style={{ backgroundColor: '#2563eb' }} />
                                                                 <div style={styles.cardHeaderText}>
                                                                     <div style={styles.candidateName}>
                                                                         {candidate.candidateId?.firstName} {candidate.candidateId?.lastName}

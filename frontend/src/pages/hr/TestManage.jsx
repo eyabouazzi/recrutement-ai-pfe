@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Card, Button, Space, message, Typography, Spin, List, Tag, Divider, Form, Input, Select, Modal } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons';
+import { Card, Button, Space, message, Typography, Spin, List, Tag, Divider, Form, Input, Select, Modal, DatePicker, InputNumber, Table } from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, RobotOutlined, LinkOutlined, ReloadOutlined, DatabaseOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTestById, addManualQuestion, deleteQuestion, deleteTest, generateAutoQuestions, updateTest } from '../../api/tests';
+import dayjs from 'dayjs';
+import {
+    getTestById,
+    addManualQuestion,
+    deleteQuestion,
+    deleteTest,
+    generateAutoQuestions,
+    updateTest,
+    regenerateQuestion,
+    listQuestionBank,
+    attachBankQuestion,
+} from '../../api/tests';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -20,6 +31,9 @@ function TestManage() {
     const [generatingAI, setGeneratingAI] = useState(false);
     const [updatingInfo, setUpdatingInfo] = useState(false);
     const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+    const [bankOpen, setBankOpen] = useState(false);
+    const [bankItems, setBankItems] = useState([]);
+    const [bankLoading, setBankLoading] = useState(false);
 
     useEffect(() => {
         fetchTest();
@@ -31,7 +45,10 @@ function TestManage() {
             const data = await getTestById(id);
             setTest(data.test);
             setQuestions(data.questions);
-            infoForm.setFieldsValue(data.test);
+            infoForm.setFieldsValue({
+                ...data.test,
+                submissionDeadline: data.test.submissionDeadline ? dayjs(data.test.submissionDeadline) : undefined,
+            });
         } catch (error) {
             message.error(error.message || 'Impossible de charger le test');
             navigate('/rh/tests');
@@ -43,7 +60,13 @@ function TestManage() {
     const handleUpdateInfo = async (values) => {
         try {
             setUpdatingInfo(true);
-            const updated = await updateTest(id, values);
+            const payload = {
+                ...values,
+                submissionDeadline: values.submissionDeadline
+                    ? values.submissionDeadline.toISOString()
+                    : null,
+            };
+            const updated = await updateTest(id, payload);
             setTest(updated.test);
             message.success('Informations mises à jour avec succès');
         } catch (error) {
@@ -84,6 +107,16 @@ function TestManage() {
         }
     };
 
+    const handleMarkReviewed = async (qId) => {
+        try {
+            const { question } = await markQuestionReviewed(qId, true);
+            setQuestions((prev) => prev.map((q) => (q._id === qId ? { ...q, ...question } : q)));
+            message.success('Question marquée validée pour publication');
+        } catch (error) {
+            message.error(error.message || 'Mise à jour impossible');
+        }
+    };
+
     const handleGenerateAI = async () => {
         try {
             setGeneratingAI(true);
@@ -96,6 +129,58 @@ function TestManage() {
         } finally {
             setGeneratingAI(false);
         }
+    };
+
+    const openBank = async () => {
+        setBankOpen(true);
+        try {
+            setBankLoading(true);
+            const data = await listQuestionBank();
+            setBankItems(data.items || []);
+        } catch (e) {
+            message.error(e.message);
+        } finally {
+            setBankLoading(false);
+        }
+    };
+
+    const handleAttachBank = async (bankId) => {
+        try {
+            const { question } = await attachBankQuestion(bankId, id);
+            setQuestions((prev) => [...prev, question]);
+            message.success('Question ajoutée depuis la banque');
+            setBankOpen(false);
+        } catch (e) {
+            message.error(e.message);
+        }
+    };
+
+    const handleRegenerateQ = async (q) => {
+        try {
+            message.loading({ content: 'Régénération IA...', key: 'reg' });
+            const data = await regenerateQuestion(q._id, '');
+            setQuestions((prev) => prev.map((x) => (x._id === q._id ? data.question : x)));
+            message.success({ content: 'Question mise à jour', key: 'reg' });
+        } catch (e) {
+            message.error({ content: e.message, key: 'reg' });
+        }
+    };
+
+    const genInvite = () => {
+        const code = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        infoForm.setFieldsValue({ inviteCode: code });
+        message.success('Code généré — pensez à sauvegarder.');
+    };
+
+    const copyInviteLink = () => {
+        const code = infoForm.getFieldValue('inviteCode') || test?.inviteCode;
+        if (!code) {
+            message.warning('Définissez ou générez un code d’invitation d’abord.');
+            return;
+        }
+        const url = `${window.location.origin}/tests/${id}?invite=${encodeURIComponent(code)}`;
+        navigator.clipboard.writeText(url);
+        message.success('Lien copié dans le presse-papiers');
     };
 
     const handleDeleteTest = async () => {
@@ -192,6 +277,49 @@ function TestManage() {
                     <Form.Item label="Description" name="description">
                         <Input.TextArea rows={3} />
                     </Form.Item>
+                    <Form.Item
+                        label="Critères d'évaluation (IA)"
+                        name="evaluationCriteria"
+                        tooltip="Transmis au modèle pour noter les réponses ouvertes et la synthèse par compétence."
+                    >
+                        <Input.TextArea rows={3} placeholder="Ex: insister sur la sécurité, la clarté, l'expérience Node.js..." />
+                    </Form.Item>
+                    <Divider orientation="left">Accès candidats & barème</Divider>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <Form.Item label="Code d'invitation (lien privé)" name="inviteCode">
+                            <Input placeholder="Vide = tout candidat authentifié" />
+                        </Form.Item>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <Space>
+                                <Button size="small" onClick={genInvite}>Générer code</Button>
+                                <Button size="small" icon={<LinkOutlined />} onClick={copyInviteLink}>Copier lien candidat</Button>
+                            </Space>
+                        </div>
+                        <Form.Item label="Date limite de passage" name="submissionDeadline">
+                            <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                        </Form.Item>
+                        <Form.Item label="Tentatives max / candidat (0 = illimité)" name="maxAttempts">
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item label="Score min. qualifié (%)" name="passThreshold">
+                            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item label="Pondération QCM (%)" name="weightQCM">
+                            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item label="Pondération ouvert (%)" name="weightOpen">
+                            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item label="Délai min. / question (s)" name="minSecondsPerQuestion">
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item label="URL Calendly" name="calendlyUrl">
+                            <Input placeholder="https://calendly.com/..." />
+                        </Form.Item>
+                    </div>
+                    <Form.Item label="Webhook (POST après soumission)" name="webhookUrl">
+                        <Input placeholder="https://..." />
+                    </Form.Item>
                     <Button type="primary" htmlType="submit" loading={updatingInfo}>
                         Sauvegarder les modifications
                     </Button>
@@ -202,14 +330,19 @@ function TestManage() {
             <Card
                 title={`Questions (${questions.length})`}
                 extra={
-                    <Button
-                        type="primary"
-                        icon={<RobotOutlined />}
-                        loading={generatingAI}
-                        onClick={handleGenerateAI}
-                    >
-                        Générer 5 questions (IA)
-                    </Button>
+                    <Space>
+                        <Button icon={<DatabaseOutlined />} onClick={openBank}>
+                            Banque de questions
+                        </Button>
+                        <Button
+                            type="primary"
+                            icon={<RobotOutlined />}
+                            loading={generatingAI}
+                            onClick={handleGenerateAI}
+                        >
+                            Générer 5 questions (IA)
+                        </Button>
+                    </Space>
                 }
                 style={{ marginBottom: 24 }}
             >
@@ -223,21 +356,44 @@ function TestManage() {
                             <List.Item
                                 key={q._id}
                                 extra={
-                                    <Button
-                                        danger
-                                        size="small"
-                                        icon={<DeleteOutlined />}
-                                        onClick={() => handleDeleteQuestion(q._id)}
-                                    >
-                                        Supprimer
-                                    </Button>
+                                    <Space>
+                                        {!q.reviewedForPublish && (
+                                            <Button
+                                                size="small"
+                                                type="primary"
+                                                ghost
+                                                icon={<CheckCircleOutlined />}
+                                                onClick={() => handleMarkReviewed(q._id)}
+                                            >
+                                                Valider RH
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="small"
+                                            icon={<ReloadOutlined />}
+                                            onClick={() => handleRegenerateQ(q)}
+                                        >
+                                            IA
+                                        </Button>
+                                        <Button
+                                            danger
+                                            size="small"
+                                            icon={<DeleteOutlined />}
+                                            onClick={() => handleDeleteQuestion(q._id)}
+                                        >
+                                            Supprimer
+                                        </Button>
+                                    </Space>
                                 }
                             >
                                 <div>
                                     <Text strong>{index + 1}. {q.prompt}</Text>
-                                    <Tag color={q.type === 'QCM' ? 'blue' : 'orange'} style={{ marginLeft: 8 }}>
+                                    <Tag color={q.type === 'QCM' ? 'blue' : q.type === 'PROBLEM' ? 'purple' : q.type === 'SHORT_ANSWER' ? 'orange' : 'default'} style={{ marginLeft: 8 }}>
                                         {q.type}
                                     </Tag>
+                                    {q.reviewedForPublish ? (
+                                        <Tag color="success" style={{ marginLeft: 8 }}>Validée RH</Tag>
+                                    ) : null}
                                 </div>
                                 {q.type === 'QCM' && q.options?.length > 0 && (
                                     <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -268,7 +424,9 @@ function TestManage() {
                     <Form.Item label="Type de question" name="type" rules={[{ required: true }]}>
                         <Select onChange={setQuestionType}>
                             <Option value="QCM">QCM (Choix multiple)</Option>
-                            <Option value="TEXT">Texte libre (évalué par IA)</Option>
+                            <Option value="TEXT">Texte libre (IA)</Option>
+                            <Option value="SHORT_ANSWER">Rédaction courte (IA)</Option>
+                            <Option value="PROBLEM">Cas / résolution de problème (IA)</Option>
                         </Select>
                     </Form.Item>
                     <Form.Item label="Énoncé de la question" name="prompt" rules={[{ required: true, message: 'L\'énoncé est requis' }]}>
@@ -284,6 +442,35 @@ function TestManage() {
             </Card>
 
             {/* Delete Test Confirmation */}
+            <Modal
+                title="Banque de questions"
+                open={bankOpen}
+                onCancel={() => setBankOpen(false)}
+                footer={null}
+                width={720}
+            >
+                <Table
+                    loading={bankLoading}
+                    size="small"
+                    rowKey="_id"
+                    dataSource={bankItems}
+                    columns={[
+                        { title: 'Type', dataIndex: 'type', width: 90 },
+                        { title: 'Énoncé', dataIndex: 'prompt', ellipsis: true },
+                        {
+                            title: '',
+                            key: 'a',
+                            width: 100,
+                            render: (_, row) => (
+                                <Button type="primary" size="small" onClick={() => handleAttachBank(row._id)}>
+                                    Ajouter au test
+                                </Button>
+                            ),
+                        },
+                    ]}
+                />
+            </Modal>
+
             <Modal
                 title="Confirmer la suppression"
                 open={deleteConfirmVisible}

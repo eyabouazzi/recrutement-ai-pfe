@@ -1,11 +1,21 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useContext, useState } from 'react';
 import { AuthContext } from '../contexts/authContext';
+import UserAvatar from '../Components/UserAvatar.jsx';
+import ChatWidget from '../Components/ChatWidget.jsx';
+import { clearStoredToken } from '../utils/authStorage';
+import { useWebSocket } from '../contexts/WebSocketContext.jsx';
+
+function ShieldIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>; }
+function HeartIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.7 0l-1.1 1-1.1-1a5.5 5.5 0 0 0-7.8 7.8l1 1 7.9 7.9 7.8-7.9 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>; }
 
 const NAV = [
   { path: '/tests', label: 'Offres d\'emploi', icon: TestIcon },
   { path: '/mes-candidatures', label: 'Candidatures', icon: CandidateIcon },
   { path: '/mes-resultats', label: 'Résultats', icon: ResultIcon },
+  { path: '/recommendations', label: 'Recommandations IA', icon: ResultIcon },
+  { path: '/favorites', label: 'Mes Favoris', icon: HeartIcon },
+  { path: '/mes-donnees', label: 'Mes données', icon: ShieldIcon },
 ];
 
 function TestIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /></svg>; }
@@ -19,25 +29,23 @@ function CandidateLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, setToken, setUser } = useContext(AuthContext);
+  const { unreadCount } = useWebSocket();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const initials = user
-    ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || 'C'
-    : 'C';
+  const notificationCount = unreadCount;
 
   const handleLogout = () => {
     setToken(null); setUser(null);
-    localStorage.removeItem('auth-token');
+    clearStoredToken();
     navigate('/login');
   };
 
   return (
-    <div style={s.root}>
+    <div className="wow-candidate-shell" style={s.root}>
       {/* ── Top Header ── */}
-      <header style={s.header}>
-        <div style={s.headerInner}>
+      <header className="wow-candidate-header" style={s.header}>
+        <div className="wow-candidate-header-inner" style={s.headerInner}>
           {/* Brand */}
-          <Link to="/" style={s.brand}>
+          <Link to="/" className="wow-candidate-brand" style={s.brand}>
             <div style={s.brandIcon}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#5B3FA8" />
@@ -50,7 +58,7 @@ function CandidateLayout() {
           </Link>
 
           {/* Navigation */}
-          <nav style={s.nav}>
+          <nav className="wow-candidate-nav" style={s.nav}>
             {NAV.map(item => {
               const active = location.pathname.startsWith(item.path);
               const Icon = item.icon;
@@ -58,6 +66,7 @@ function CandidateLayout() {
                 <Link
                   key={item.path}
                   to={item.path}
+                  className={`wow-candidate-nav-link ${active ? 'is-active' : ''}`}
                   style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}
                 >
                   <span style={{ color: active ? 'var(--purple)' : 'var(--text-muted)' }}><Icon /></span>
@@ -68,7 +77,7 @@ function CandidateLayout() {
           </nav>
 
           {/* Right side */}
-          <div style={s.right}>
+          <div className="wow-candidate-right" style={s.right}>
             {/* Role badge */}
             <div style={s.roleBadge}>
               <span style={s.roleDot} />
@@ -76,12 +85,20 @@ function CandidateLayout() {
             </div>
 
             {/* Bell */}
-            <button style={s.iconBtn}><BellSvg /></button>
+            <button
+              className="wow-candidate-icon-btn notification-badge"
+              data-count={notificationCount}
+              style={s.iconBtn}
+              onClick={() => navigate('/notifications')}
+              title="Notifications"
+            >
+              <BellSvg />
+            </button>
 
             {/* Avatar */}
             <div style={{ position: 'relative' }}>
-              <button style={s.avatarBtn} onClick={() => setMenuOpen(v => !v)}>
-                <div style={s.avatar}>{initials}</div>
+              <button className="wow-candidate-avatar-btn" style={s.avatarBtn} onClick={() => setMenuOpen(v => !v)}>
+                <UserAvatar user={user} size={24} />
                 <span style={s.avatarName}>{user?.firstName}</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="6,9 12,15 18,9" />
@@ -89,15 +106,24 @@ function CandidateLayout() {
               </button>
 
               {menuOpen && (
-                <div style={s.dropdown}>
+                <div className="wow-candidate-dropdown" style={s.dropdown}>
                   <div style={s.dropHeader}>
-                    <div style={s.dropAvatar}>{initials}</div>
+                    <UserAvatar user={user} size={36} />
                     <div>
                       <div style={s.dropName}>{user?.firstName} {user?.lastName}</div>
                       <div style={s.dropEmail}>{user?.email}</div>
                     </div>
                   </div>
                   <div style={s.dropDivider} />
+                  <button
+                    style={s.dropItem}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate('/profile');
+                    }}
+                  >
+                    <UserIcon /> Mon profil
+                  </button>
                   <button style={{ ...s.dropItem, color: '#DC2626' }} onClick={handleLogout}>
                     <LogoutSvg /> Déconnexion
                   </button>
@@ -109,13 +135,15 @@ function CandidateLayout() {
       </header>
 
       {/* ── Content ── */}
-      <main style={s.content}>
-        <div style={s.contentInner}>
+      <main className="wow-candidate-content" style={s.content}>
+        <div className="wow-candidate-content-inner" style={s.contentInner}>
           <Outlet />
         </div>
       </main>
 
-      <footer style={s.footer}>
+      <ChatWidget />
+
+      <footer className="wow-candidate-footer" style={s.footer}>
         © {new Date().getFullYear()} Recruit AI Screening — Portail Candidat
       </footer>
     </div>

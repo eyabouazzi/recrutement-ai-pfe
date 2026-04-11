@@ -134,6 +134,10 @@ async function listUsers(req, res) {
 
 async function deleteUser(req, res) {
     try {
+        // Only admins should delete users from the dashboard.
+        if (req.user?.role !== 'admin') {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
+        }
         const id = req.params.id;
         const existingUser = await userModel.findById(id);
         if (!existingUser) {

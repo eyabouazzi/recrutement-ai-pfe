@@ -1,6 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useContext, useState } from 'react';
 import { AuthContext } from '../contexts/authContext';
+import UserAvatar from '../Components/UserAvatar.jsx';
+import { clearStoredToken } from '../utils/authStorage';
 
 const NAV_GROUPS = [
   {
@@ -58,23 +60,19 @@ function MainLayout() {
 
   const handleLogout = () => {
     setToken(null); setUser(null);
-    localStorage.removeItem('auth-token');
+    clearStoredToken();
     navigate('/login');
   };
-
-  const initials = user
-    ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || 'A'
-    : 'A';
 
   const isActive = (path, exact) =>
     exact ? location.pathname === path : location.pathname.startsWith(path);
 
   return (
-    <div style={s.root}>
+    <div className="wow-admin-shell" style={s.root}>
       {/* ── SIDEBAR ── */}
-      <aside style={{ ...s.sidebar, width: collapsed ? 70 : 240 }}>
+      <aside className="wow-admin-sidebar" style={{ ...s.sidebar, width: collapsed ? 70 : 240 }}>
         {/* Brand */}
-        <div style={s.brand}>
+        <div className="wow-admin-brand" style={s.brand}>
           <div style={s.brandIcon}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#5B3FA8" />
@@ -91,8 +89,8 @@ function MainLayout() {
         <div style={s.divider} />
 
         {/* Nav groups */}
-        <nav style={s.nav}>
-          {NAV_GROUPS.map(group => (
+        <nav className="wow-admin-nav" style={s.nav}>
+          {NAV_GROUPS.filter(group => group.label !== 'Portail RH').map(group => (
             <div key={group.label} style={s.navGroup}>
               {!collapsed && (
                 <span style={s.groupLabel}>{group.label}</span>
@@ -105,6 +103,7 @@ function MainLayout() {
                     key={item.path}
                     to={item.path}
                     title={collapsed ? item.label : undefined}
+                    className={`wow-admin-nav-item ${active ? 'is-active' : ''}`}
                     style={{
                       ...s.navItem,
                       ...(active ? s.navItemActive : {}),
@@ -131,7 +130,7 @@ function MainLayout() {
             padding: collapsed ? '12px 0' : '12px 14px',
             justifyContent: collapsed ? 'center' : 'flex-start',
           }}>
-            <div style={s.userAvatar}>{initials}</div>
+            <UserAvatar user={user} size={30} />
             {!collapsed && (
               <div>
                 <div style={s.userName}>{user?.firstName} {user?.lastName}</div>
@@ -141,7 +140,7 @@ function MainLayout() {
           </div>
         </div>
 
-        <button style={s.collapseBtn} onClick={() => setCollapsed(c => !c)}>
+        <button className="wow-admin-collapse-btn" style={s.collapseBtn} onClick={() => setCollapsed(c => !c)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             {collapsed ? <polyline points="9,18 15,12 9,6" /> : <polyline points="15,18 9,12 15,6" />}
           </svg>
@@ -149,37 +148,37 @@ function MainLayout() {
       </aside>
 
       {/* ── MAIN ── */}
-      <div style={s.main}>
-        <header style={s.topbar}>
+      <div className="wow-admin-main" style={s.main}>
+        <header className="wow-admin-topbar" style={s.topbar}>
           <div>
             <h1 style={s.pageTitle}>Administration</h1>
             <p style={s.pageSub}>Bienvenue, {user?.firstName || 'Admin'}</p>
           </div>
-          <div style={s.topRight}>
-            <button style={s.iconBtn}><BellIcon /></button>
+          <div className="wow-admin-top-right" style={s.topRight}>
+            <button className="wow-admin-icon-btn" style={s.iconBtn}><BellIcon /></button>
 
             <div style={{ position: 'relative' }}>
-              <button style={s.avatarBtn} onClick={() => setUserMenuOpen(v => !v)}>
-                <div style={s.topAvatar}>{initials}</div>
+              <button className="wow-admin-avatar-btn" style={s.avatarBtn} onClick={() => setUserMenuOpen(v => !v)}>
+                <UserAvatar user={user} size={24} />
                 <span style={s.avatarName}>{user?.firstName || 'Admin'}</span>
                 <ChevronIcon />
               </button>
 
               {userMenuOpen && (
-                <div style={s.dropdown}>
+                <div className="wow-admin-dropdown" style={s.dropdown}>
                   <div style={s.dropHeader}>
-                    <div style={s.dropAvatar}>{initials}</div>
+                    <UserAvatar user={user} size={36} />
                     <div>
                       <div style={s.dropName}>{user?.firstName} {user?.lastName}</div>
                       <div style={s.dropEmail}>{user?.email}</div>
                     </div>
                   </div>
                   <div style={s.dropDivider} />
-                  <button style={s.dropItem} onClick={() => { setUserMenuOpen(false); navigate('/profile'); }}>
+                  <button style={s.dropItem} onClick={() => { setUserMenuOpen(false); navigate('/admin/profile'); }}>
                     <UserIcon /> Mon profil
                   </button>
-                  <button style={s.dropItem} onClick={() => { setUserMenuOpen(false); navigate('/profile/change-password'); }}>
-                    <KeyIcon /> Changer le mot de passe
+                  <button style={s.dropItem} onClick={() => { setUserMenuOpen(false); navigate('/admin/profile'); }}>
+                    <KeyIcon /> Mot de passe
                   </button>
                   <div style={s.dropDivider} />
                   <button style={{ ...s.dropItem, color: '#DC2626' }} onClick={handleLogout}>
@@ -191,7 +190,7 @@ function MainLayout() {
           </div>
         </header>
 
-        <main style={s.content}>
+        <main className="wow-admin-content" style={s.content}>
           <Outlet />
         </main>
       </div>

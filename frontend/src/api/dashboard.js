@@ -241,3 +241,8 @@ export async function fetchRecentActivity() {
         return [];
     }
 }
+
+// Named alias — AnalyticsCharts.jsx imports this name
+export async function getDashboardStats() {
+    return fetchDashboardStats();
+}

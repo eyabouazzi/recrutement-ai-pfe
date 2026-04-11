@@ -76,6 +76,9 @@ class ErrorHandler {
             if (data?.message) {
                 return data.message;
             }
+            if (data?.error) {
+                return data.error;
+            }
             
             // Check for validation errors
             if (data?.errors) {

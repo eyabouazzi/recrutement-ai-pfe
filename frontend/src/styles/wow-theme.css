@@ -1,0 +1,499 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap');
+
+.wow-app {
+  --wow-ink: #0f172a;
+  --wow-sub: #475569;
+  --wow-primary-a: #0f766e;
+  --wow-primary-b: #0284c7;
+  --wow-sun-a: #f97316;
+  --wow-sun-b: #f59e0b;
+  --wow-card: #ffffff;
+  --wow-border: #dbe4ef;
+  --wow-surface: #f8fafc;
+  --wow-shadow: 0 16px 34px rgba(2, 6, 23, 0.08);
+  --wow-shadow-lg: 0 22px 50px rgba(2, 6, 23, 0.14);
+}
+
+body {
+  font-family: 'Manrope', 'Sora', 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(900px 420px at 100% -10%, rgba(14, 165, 233, 0.08), transparent 60%),
+    radial-gradient(900px 420px at -10% 100%, rgba(249, 115, 22, 0.08), transparent 60%),
+    #f8fafc;
+}
+
+.wow-app .ant-card {
+  border-radius: 18px !important;
+  border: 1px solid var(--wow-border) !important;
+  box-shadow: var(--wow-shadow) !important;
+  overflow: hidden;
+}
+
+.wow-app .ant-card:hover {
+  box-shadow: var(--wow-shadow-lg) !important;
+}
+
+.wow-app .ant-btn-primary {
+  border: none !important;
+  color: #fff !important;
+  background: linear-gradient(120deg, var(--wow-primary-a), var(--wow-primary-b)) !important;
+  box-shadow: 0 12px 24px rgba(2, 132, 199, 0.26) !important;
+}
+
+.wow-app .ant-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.32) !important;
+}
+
+.wow-app .ant-btn-default:hover {
+  color: var(--wow-primary-b) !important;
+  border-color: rgba(2, 132, 199, 0.45) !important;
+}
+
+.wow-app .ant-input,
+.wow-app .ant-input-affix-wrapper,
+.wow-app .ant-select-selector {
+  border-color: var(--wow-border) !important;
+  border-radius: 12px !important;
+}
+
+.wow-app .ant-input:focus,
+.wow-app .ant-input-affix-wrapper-focused,
+.wow-app .ant-select-focused .ant-select-selector {
+  border-color: rgba(2, 132, 199, 0.62) !important;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.14) !important;
+}
+
+.wow-app .ant-table-wrapper {
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--wow-border) !important;
+  box-shadow: var(--wow-shadow) !important;
+}
+
+.wow-app .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #f8fafc, #edf2f7) !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+.wow-app .ant-table-tbody > tr:hover > td {
+  background: rgba(2, 132, 199, 0.06) !important;
+}
+
+.wow-app .ant-modal-content {
+  border-radius: 20px !important;
+  border: 1px solid var(--wow-border) !important;
+  box-shadow: var(--wow-shadow-lg) !important;
+}
+
+.wow-app .ant-tag {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+.wow-public-shell .pub-main {
+  background:
+    radial-gradient(760px 260px at 100% 0%, rgba(14, 165, 233, 0.1), transparent 60%),
+    radial-gradient(760px 260px at 0% 100%, rgba(249, 115, 22, 0.1), transparent 60%);
+}
+
+.wow-public-shell .pub-nav {
+  backdrop-filter: blur(20px);
+}
+
+.wow-public-shell .pub-nav-cta,
+.wow-public-shell .pub-mobile-cta,
+.wow-public-shell .pub-newsletter-btn {
+  background: linear-gradient(120deg, var(--wow-primary-a), var(--wow-primary-b)) !important;
+}
+
+.wow-public-shell .pub-announcement {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 260;
+  height: 30px;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(95deg, #062b38, #0f4c63, #7c2d12);
+}
+
+.wow-public-shell .pub-announcement-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  height: 100%;
+  animation: wowTicker 26s linear infinite;
+}
+
+.wow-public-shell .pub-announcement-item {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: rgba(240, 249, 255, 0.92);
+  margin-right: 2.2rem;
+}
+
+.wow-public-shell .pub-announcement-item::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  margin-right: 0.55rem;
+  background: #fef08a;
+  box-shadow: 0 0 12px rgba(254, 240, 138, 0.55);
+}
+
+@keyframes wowTicker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.wow-public-shell .pub-nav {
+  top: 30px;
+}
+
+.wow-public-shell .pub-main {
+  padding-top: 94px;
+}
+
+.wow-public-shell .pub-scroll-progress {
+  height: 2px;
+  width: 100%;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.wow-public-shell .pub-scroll-progress > span {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #0ea5e9, #10b981, #f97316);
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.55);
+}
+
+.wow-public-shell .pub-float-actions {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.wow-public-shell .pub-float-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.85rem;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: rgba(248, 250, 252, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.18);
+}
+
+.wow-public-shell .pub-float-link--primary {
+  color: #ffffff;
+  border: none;
+  background: linear-gradient(120deg, #0f766e, #0284c7);
+}
+
+.wow-public-page {
+  position: relative;
+}
+
+.wow-public-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(420px 240px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 60%),
+    radial-gradient(420px 240px at 0% 100%, rgba(249, 115, 22, 0.08), transparent 60%);
+}
+
+.careers-header,
+.companies-header,
+.recruiters-header,
+.events-header {
+  position: relative;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.careers-header::after,
+.companies-header::after,
+.recruiters-header::after,
+.events-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(125, 211, 252, 0.8), transparent);
+}
+
+.careers-filters-panel {
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.15) !important;
+}
+
+.careers-featured {
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background:
+    radial-gradient(460px 200px at 100% 0%, rgba(14, 165, 233, 0.09), transparent 62%),
+    rgba(248, 250, 252, 0.66) !important;
+}
+
+.careers-main,
+.companies-main,
+.recruiters-main,
+.events-main,
+.company-detail-page,
+.recruiter-detail-page {
+  position: relative;
+  z-index: 1;
+}
+
+.company-detail-hero-card,
+.recruiter-detail-hero-card {
+  background:
+    radial-gradient(380px 180px at 100% 0%, rgba(14, 165, 233, 0.1), transparent 58%),
+    #ffffff !important;
+}
+
+.careers-job-card,
+.careers-featured-card,
+.recruiters-card,
+.events-card,
+.company-detail-card,
+.company-detail-hero-card,
+.recruiter-detail-card,
+.recruiter-detail-hero-card {
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.08) !important;
+}
+
+.careers-job-card:hover,
+.recruiters-card:hover,
+.events-card:hover,
+.company-detail-card:hover,
+.recruiter-detail-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px rgba(2, 6, 23, 0.12) !important;
+}
+
+.wow-auth-topbar {
+  border-bottom: 1px solid rgba(186, 230, 253, 0.2) !important;
+}
+
+.wow-auth-form-card {
+  background:
+    radial-gradient(260px 140px at 100% 0%, rgba(14, 165, 233, 0.14), transparent 62%),
+    #ffffff !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+}
+
+.wow-candidate-header,
+.wow-admin-topbar {
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+}
+
+.wow-candidate-header::after,
+.wow-admin-topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.65), transparent);
+}
+
+.wow-candidate-nav-link,
+.wow-admin-nav-item {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.wow-candidate-nav-link:hover,
+.wow-admin-nav-item:hover {
+  transform: translateY(-1px);
+}
+
+.wow-candidate-dropdown,
+.wow-admin-dropdown {
+  border: 1px solid rgba(148, 163, 184, 0.34) !important;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.16) !important;
+}
+
+.wow-candidate-content-inner,
+.wow-admin-content {
+  background:
+    radial-gradient(440px 200px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 62%),
+    rgba(248, 250, 252, 0.45);
+  border-radius: 18px;
+}
+
+.wow-admin-sidebar {
+  border-right: 1px solid rgba(148, 163, 184, 0.24) !important;
+  background:
+    radial-gradient(260px 180px at 0% 0%, rgba(14, 165, 233, 0.09), transparent 60%),
+    radial-gradient(260px 180px at 100% 100%, rgba(249, 115, 22, 0.1), transparent 60%),
+    rgba(255, 255, 255, 0.9) !important;
+}
+
+.wow-auth-shell::before,
+.wow-candidate-shell::before,
+.wow-admin-shell::before,
+.wow-hr-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wow-auth-shell::before {
+  background:
+    radial-gradient(480px 280px at 15% 10%, rgba(14, 165, 233, 0.22), transparent 65%),
+    radial-gradient(520px 340px at 90% 85%, rgba(249, 115, 22, 0.16), transparent 60%);
+}
+
+.wow-candidate-shell::before {
+  background:
+    radial-gradient(460px 280px at 0% 0%, rgba(14, 165, 233, 0.14), transparent 68%),
+    radial-gradient(520px 340px at 100% 100%, rgba(249, 115, 22, 0.12), transparent 64%);
+}
+
+.wow-admin-shell::before {
+  background:
+    radial-gradient(460px 280px at 10% 90%, rgba(14, 165, 233, 0.13), transparent 68%),
+    radial-gradient(520px 340px at 90% 10%, rgba(249, 115, 22, 0.12), transparent 64%);
+}
+
+.wow-hr-shell {
+  background:
+    radial-gradient(420px 260px at 0% 0%, rgba(14, 165, 233, 0.33), transparent 60%),
+    radial-gradient(420px 260px at 100% 100%, rgba(249, 115, 22, 0.27), transparent 60%),
+    linear-gradient(135deg, #0c1626 0%, #103450 60%, #0f766e 120%);
+}
+
+.wow-hr-shell .dashboard-header {
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.wow-hr-shell .dashboard-title {
+  background: linear-gradient(120deg, #e2e8f0 0%, #bae6fd 55%, #fde68a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wow-hr-shell .modern-sidebar {
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.52);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.wow-hr-shell .modern-nav-item {
+  border-radius: 12px;
+}
+
+.wow-hr-shell .modern-nav-item.active {
+  background: linear-gradient(120deg, rgba(15, 118, 110, 0.55), rgba(2, 132, 199, 0.55));
+  color: #ffffff !important;
+}
+
+.wow-hr-shell .notification-badge {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+}
+
+.wow-dashboard-main,
+.wow-dashboard-content,
+.wow-auth-shell,
+.wow-candidate-shell,
+.wow-admin-shell {
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix: ensure dashboard header in HR shell is a proper sticky bar */
+.wow-hr-shell .dashboard-header {
+  border-radius: 0;
+  margin-bottom: 0;
+  border: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.wow-auth-shell [style*='background: rgba(255,255,255,0.97)'] {
+  border: 1px solid var(--wow-border) !important;
+  box-shadow: var(--wow-shadow-lg) !important;
+}
+
+.wow-candidate-shell a:hover,
+.wow-admin-shell a:hover,
+.wow-public-shell a:hover {
+  filter: saturate(1.06);
+}
+
+@media (max-width: 900px) {
+  .wow-app .ant-card {
+    border-radius: 14px !important;
+  }
+
+  .wow-public-shell .pub-float-actions {
+    right: 0.65rem;
+    bottom: 0.65rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .wow-public-shell .pub-announcement {
+    height: 28px;
+  }
+
+  .wow-public-shell .pub-nav {
+    top: 28px;
+  }
+
+  .wow-public-shell .pub-main {
+    padding-top: 92px;
+  }
+
+  .wow-public-shell .pub-float-link:first-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wow-app *,
+  .wow-app *::before,
+  .wow-app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
