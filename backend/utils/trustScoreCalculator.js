@@ -10,6 +10,7 @@ const PENALTIES = {
     CLIENT_CLOCK_MISMATCH: 4,
     FULLSCREEN_EXITS: 8,
     DEVICE_SWITCH: 18,
+    INACTIVITY_GAP: 10,
 };
 
 function severityMultiplier(severity) {

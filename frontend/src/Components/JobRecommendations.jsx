@@ -1,17 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, RefreshCw, Briefcase, MapPin, Clock,
   TrendingUp, Award, Target, ChevronRight, Star,
-  Brain, Zap, LayoutGrid, List, ArrowUpRight, CheckCircle
+  Brain, Zap, LayoutGrid, List
 } from 'lucide-react';
+import { Button, Modal, Upload, message } from 'antd';
+import { UploadOutlined, SaveOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { getRecommendations, refreshRecommendations, getProfileInsights } from '../api/recommendations';
+import { updateProfile } from '../api/auth';
+import { AuthContext } from '../contexts/authContext.jsx';
 
-/* ── helpers ─────────────────────────────────────────────────── */
 const scoreColor = (s) => s >= 80 ? '#10b981' : s >= 60 ? '#6366f1' : s >= 40 ? '#f59e0b' : '#94a3b8';
 const scoreLabel = (s) => s >= 80 ? 'Excellent' : s >= 60 ? 'Bon match' : s >= 40 ? 'Partiel' : 'Faible';
 
-/* ── InsightStat ─────────────────────────────────────────────── */
+function getRecommendationTestId(rec) {
+  return rec?.test?._id || rec?.testId?._id || rec?.testId || null;
+}
+
 function InsightStat({ icon: Icon, value, label }) {
   return (
     <div style={S.insightStat}>
@@ -22,11 +29,11 @@ function InsightStat({ icon: Icon, value, label }) {
   );
 }
 
-/* ── RecCard ─────────────────────────────────────────────────── */
-function RecCard({ rec, index, viewMode }) {
+function RecCard({ rec, index, viewMode, onStart }) {
   const sc = rec.score ?? 0;
   const clr = scoreColor(sc);
   const isGrid = viewMode === 'grid';
+  const testId = getRecommendationTestId(rec);
 
   return (
     <motion.div
@@ -37,8 +44,7 @@ function RecCard({ rec, index, viewMode }) {
       transition={{ delay: index * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: isGrid ? -4 : 0, boxShadow: '0 16px 48px rgba(124,58,237,0.12)', transition: { duration: 0.2 } }}
     >
-      {/* Score badge */}
-      <div style={{ ...S.scoreBadge, '--sc': clr, flexDirection: isGrid ? 'column' : 'row', minWidth: isGrid ? 'auto' : 120 }}>
+      <div style={{ ...S.scoreBadge, flexDirection: isGrid ? 'column' : 'row', minWidth: isGrid ? 'auto' : 120 }}>
         <div style={{ ...S.scoreCircle, borderColor: clr, color: clr }}>
           <span style={S.scoreNum}>{sc}%</span>
         </div>
@@ -46,12 +52,11 @@ function RecCard({ rec, index, viewMode }) {
         {!isGrid && <span style={S.scoreMatchLbl}>Match</span>}
       </div>
 
-      {/* Content */}
       <div style={S.recBody}>
         <div style={S.recTopRow}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={S.recTitle}>
-              {rec.test?.title ?? 'Opportunité d\'emploi'}
+              {rec.test?.title ?? "Opportunite d'emploi"}
             </div>
             {rec.test?.jobRole && (
               <div style={S.recRole}>{rec.test.jobRole}</div>
@@ -64,7 +69,17 @@ function RecCard({ rec, index, viewMode }) {
           <p style={S.recReason}>{rec.reason}</p>
         )}
 
-        {/* Matched skills */}
+        {rec.missingHardRequirements?.length > 0 && (
+          <div style={S.criticalGapBox}>
+            <div style={S.criticalGapTitle}>Competences critiques manquantes</div>
+            <div style={S.skillTags}>
+              {rec.missingHardRequirements.slice(0, 3).map((sk, i) => (
+                <span key={i} style={S.criticalSkillTag}>{sk}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {rec.matchedSkills?.length > 0 && (
           <div style={S.skillTags}>
             {rec.matchedSkills.slice(0, 4).map((sk, i) => (
@@ -78,7 +93,6 @@ function RecCard({ rec, index, viewMode }) {
           </div>
         )}
 
-        {/* Meta row */}
         <div style={S.recMeta}>
           {rec.test?.location && (
             <span style={S.metaPill}><MapPin size={11} /> {rec.test.location}</span>
@@ -91,35 +105,41 @@ function RecCard({ rec, index, viewMode }) {
           )}
         </div>
 
-        <button style={S.viewBtn}>
-          Voir l'offre <ChevronRight size={14} />
+        <button style={S.viewBtn} onClick={() => onStart(testId)} disabled={!testId}>
+          Passer le test <ChevronRight size={14} />
         </button>
       </div>
     </motion.div>
   );
 }
 
-/* ── Main Component ──────────────────────────────────────────── */
 export default function JobRecommendations({ compact = false }) {
+  const navigate = useNavigate();
+  const { user, setUser } = useContext(AuthContext);
   const [recommendations, setRecommendations] = useState([]);
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [testToStart, setTestToStart] = useState(null);
+  const [cvFile, setCvFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
-      setLoading(true); setError(null);
+      setLoading(true);
+      setError(null);
       const [recsRes, insRes] = await Promise.all([
         getRecommendations().catch(() => ({})),
         getProfileInsights().catch(() => ({})),
       ]);
       if (recsRes?.status) setRecommendations(recsRes.recommendations ?? []);
       if (insRes?.status) setInsights(insRes.insights);
-    } catch (err) {
+    } catch {
       setError('Impossible de charger les recommandations.');
     } finally {
       setLoading(false);
@@ -128,17 +148,59 @@ export default function JobRecommendations({ compact = false }) {
 
   const handleRefresh = async () => {
     try {
-      setRefreshing(true); setError(null);
+      setRefreshing(true);
+      setError(null);
       const res = await refreshRecommendations();
       if (res?.status) setRecommendations(res.recommendations ?? []);
     } catch {
-      setError('Erreur lors du rafraîchissement.');
+      setError('Erreur lors du rafraichissement.');
     } finally {
       setRefreshing(false);
     }
   };
 
-  /* ── Loading ── */
+  const startTest = (testId) => {
+    if (!testId) {
+      message.warning('Test introuvable.');
+      return;
+    }
+    if (!user?.cvUrl && !String(user?.cvText || '').trim()) {
+      setTestToStart(testId);
+      setCvFile(null);
+      setUploadModalVisible(true);
+      return;
+    }
+    navigate(`/tests/${testId}`);
+  };
+
+  const submitCvAndStart = async () => {
+    if (!cvFile) {
+      message.warning('Veuillez selectionner un CV avant de continuer.');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('cv', cvFile);
+      formData.append('analyzeCv', 'true');
+      const response = await updateProfile(formData);
+
+      if (!response?.status || !response?.user) {
+        throw new Error("Erreur lors de l'upload du CV");
+      }
+
+      setUser?.(response.user);
+      setUploadModalVisible(false);
+      message.success('CV importe avec succes.');
+      navigate(`/tests/${testToStart}`);
+    } catch (err) {
+      message.error(err.message || 'Impossible de telecharger le CV');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={S.loadWrap}>
@@ -149,21 +211,20 @@ export default function JobRecommendations({ compact = false }) {
     );
   }
 
-  /* ── Compact mode ── */
   if (compact) {
     return (
       <div style={S.compactWrap}>
         <div style={S.compactHead}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Sparkles size={16} style={{ color: '#7c3aed' }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-heading)' }}>Recommandés pour vous</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-heading)' }}>Recommandes pour vous</span>
           </div>
           <button style={S.refreshBtn} onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={13} style={{ animation: refreshing ? 'spin 0.9s linear infinite' : 'none' }} />
           </button>
         </div>
         {recommendations.length === 0 ? (
-          <div style={S.emptySmall}>Complétez des tests pour obtenir des recommandations.</div>
+          <div style={S.emptySmall}>Completez des tests pour obtenir des recommandations.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {recommendations.slice(0, 3).map((rec, i) => {
@@ -171,7 +232,7 @@ export default function JobRecommendations({ compact = false }) {
               const clr = scoreColor(sc);
               return (
                 <motion.div
-                  key={rec.testId ?? i}
+                  key={getRecommendationTestId(rec) ?? i}
                   style={S.compactItem}
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -182,13 +243,15 @@ export default function JobRecommendations({ compact = false }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-heading)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {rec.test?.title ?? 'Offre d\'emploi'}
+                      {rec.test?.title ?? "Offre d'emploi"}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {rec.reason}
                     </div>
                   </div>
-                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <button style={S.compactActionBtn} onClick={() => startTest(getRecommendationTestId(rec))}>
+                    Passer
+                  </button>
                 </motion.div>
               );
             })}
@@ -198,10 +261,8 @@ export default function JobRecommendations({ compact = false }) {
     );
   }
 
-  /* ── Full page ── */
   return (
     <div style={S.root}>
-      {/* Profile Insights banner */}
       {insights && (
         <motion.div
           style={S.insightsBanner}
@@ -213,19 +274,19 @@ export default function JobRecommendations({ compact = false }) {
             <div style={S.insightsBrainIcon}><Brain size={24} /></div>
             <div>
               <div style={S.insightsTitle}>Analyse de votre profil</div>
-              <div style={S.insightsSub}>Basée sur vos résultats de tests et compétences détectées</div>
+              <div style={S.insightsSub}>Basee sur vos resultats de tests et competences detectees</div>
             </div>
           </div>
           <div style={S.insightsStats}>
-            <InsightStat icon={Award} value={insights.experienceLevel ?? '—'} label="Niveau" />
-            <InsightStat icon={Target} value={insights.totalSubmissions ?? 0} label="Tests complétés" />
+            <InsightStat icon={Award} value={insights.experienceLevel ?? '-'} label="Niveau" />
+            <InsightStat icon={Target} value={insights.totalSubmissions ?? 0} label="Tests completes" />
             <InsightStat icon={TrendingUp} value={`${insights.averageScore ?? 0}%`} label="Score moyen" />
-            <InsightStat icon={Zap} value={insights.skills?.length ?? 0} label="Compétences" />
+            <InsightStat icon={Zap} value={insights.skills?.length ?? 0} label="Competences" />
           </div>
 
           {insights.topSkills?.length > 0 && (
             <div style={S.topSkillsRow}>
-              <span style={S.topSkillsLabel}>Top compétences :</span>
+              <span style={S.topSkillsLabel}>Top competences :</span>
               {insights.topSkills.map((sk, i) => (
                 <span key={i} style={S.topSkillTag}>{sk.skill} ({sk.avgScore}%)</span>
               ))}
@@ -234,18 +295,16 @@ export default function JobRecommendations({ compact = false }) {
         </motion.div>
       )}
 
-      {/* Header row */}
       <div style={S.headerRow}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={S.headerIcon}><Sparkles size={20} /></div>
           <div>
-            <h1 style={S.pageTitle}>Offres recommandées</h1>
-            <p style={S.pageSub}>{recommendations.length} offre{recommendations.length !== 1 ? 's' : ''} correspondent à votre profil</p>
+            <h1 style={S.pageTitle}>Offres recommandees</h1>
+            <p style={S.pageSub}>{recommendations.length} offre{recommendations.length !== 1 ? 's' : ''} correspondent a votre profil</p>
           </div>
         </div>
 
         <div style={S.actions}>
-          {/* View toggle */}
           <div style={S.viewToggle}>
             <button
               style={{ ...S.viewBtn2, ...(viewMode === 'grid' ? S.viewBtnActive : {}) }}
@@ -265,17 +324,13 @@ export default function JobRecommendations({ compact = false }) {
 
           <button style={S.refreshBtnPrimary} onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={14} style={{ animation: refreshing ? 'spin 0.9s linear infinite' : 'none' }} />
-            {refreshing ? 'Actualisation…' : 'Actualiser'}
+            {refreshing ? 'Actualisation...' : 'Actualiser'}
           </button>
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div style={S.errorBanner}>{error}</div>
-      )}
+      {error && <div style={S.errorBanner}>{error}</div>}
 
-      {/* Empty state */}
       {recommendations.length === 0 && !error ? (
         <motion.div
           style={S.emptyWrap}
@@ -284,14 +339,13 @@ export default function JobRecommendations({ compact = false }) {
         >
           <div style={S.emptyIcon}><Briefcase size={40} /></div>
           <h3 style={S.emptyTitle}>Aucune recommandation pour l'instant</h3>
-          <p style={S.emptySub}>Complétez des tests pour que notre IA puisse analyser votre profil et vous proposer les meilleures offres.</p>
+          <p style={S.emptySub}>Completez des tests pour que notre IA puisse analyser votre profil et vous proposer les meilleures offres.</p>
           <button style={S.emptyBtn} onClick={handleRefresh} disabled={refreshing}>
             <Sparkles size={15} />
-            Générer mes recommandations
+            Generer mes recommandations
           </button>
         </motion.div>
       ) : (
-        /* Recommendations grid/list */
         <AnimatePresence mode="wait">
           <motion.div
             key={viewMode}
@@ -302,23 +356,73 @@ export default function JobRecommendations({ compact = false }) {
             transition={{ duration: 0.2 }}
           >
             {recommendations.map((rec, i) => (
-              <RecCard key={rec.testId ?? i} rec={rec} index={i} viewMode={viewMode} />
+              <RecCard
+                key={getRecommendationTestId(rec) ?? i}
+                rec={rec}
+                index={i}
+                viewMode={viewMode}
+                onStart={startTest}
+              />
             ))}
           </motion.div>
         </AnimatePresence>
       )}
+
+      <Modal
+        title="Depot de candidature (CV requis)"
+        open={uploadModalVisible}
+        onCancel={() => !uploading && setUploadModalVisible(false)}
+        footer={null}
+        centered
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>CV</div>
+          <h3 style={{ fontSize: 18, color: '#0f172a', marginBottom: 8 }}>
+            Un CV est requis pour passer ce test
+          </h3>
+          <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, padding: '0 20px' }}>
+            Merci d'ajouter votre CV pour continuer vers le test recommande.
+          </p>
+
+          <Upload
+            beforeUpload={(file) => { setCvFile(file); return false; }}
+            maxCount={1}
+            accept=".pdf,.docx,.txt,.md,.rtf"
+            fileList={cvFile ? [{ uid: '1', name: cvFile.name, status: 'done' }] : []}
+            onRemove={() => { setCvFile(null); return true; }}
+          >
+            <Button icon={<UploadOutlined />} size="large">
+              {cvFile ? 'Changer de fichier' : 'Televerser votre CV'}
+            </Button>
+          </Upload>
+
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            size="large"
+            block
+            loading={uploading}
+            onClick={submitCvAndStart}
+            style={{
+              marginTop: 24,
+              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+              border: 'none',
+              fontWeight: 700,
+            }}
+          >
+            Soumettre et commencer le test
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-/* ── Styles ─────────────────────────────────────────────────────────────── */
 const S = {
   root: {
     display: 'flex', flexDirection: 'column', gap: 24,
     fontFamily: "'Inter', sans-serif",
   },
-
-  /* Insights banner */
   insightsBanner: {
     padding: '28px 32px',
     borderRadius: 20,
@@ -357,8 +461,6 @@ const S = {
     background: 'rgba(255,255,255,0.18)',
     fontSize: 12.5, fontWeight: 600,
   },
-
-  /* Header row */
   headerRow: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     gap: 16, flexWrap: 'wrap',
@@ -374,9 +476,7 @@ const S = {
     fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
   pageSub: { margin: '3px 0 0', fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 },
-
   actions: { display: 'flex', alignItems: 'center', gap: 10 },
-
   viewToggle: {
     display: 'flex', gap: 2,
     background: 'var(--bg-subtle)', borderRadius: 10,
@@ -393,7 +493,6 @@ const S = {
     background: 'var(--bg-white)', color: '#7c3aed',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
-
   refreshBtnPrimary: {
     display: 'inline-flex', alignItems: 'center', gap: 8,
     padding: '10px 18px', borderRadius: 11,
@@ -403,15 +502,11 @@ const S = {
     boxShadow: '0 4px 16px rgba(124,58,237,0.3)',
     transition: 'opacity 0.2s', fontFamily: "'Inter', sans-serif",
   },
-
-  /* Error */
   errorBanner: {
     padding: '14px 20px', borderRadius: 12,
     background: '#fef2f2', border: '1px solid #fecaca',
     color: '#dc2626', fontSize: 13.5, fontWeight: 500,
   },
-
-  /* Empty state */
   emptyWrap: {
     padding: '64px 32px', borderRadius: 20,
     background: 'var(--bg-subtle)',
@@ -435,16 +530,12 @@ const S = {
     fontSize: 14, fontWeight: 700, fontFamily: "'Inter', sans-serif",
     boxShadow: '0 4px 20px rgba(124,58,237,0.35)',
   },
-
-  /* Grid / List */
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
     gap: 18,
   },
   listCol: { display: 'flex', flexDirection: 'column', gap: 12 },
-
-  /* Rec card */
   recCard: {
     background: 'var(--bg-white)',
     border: '1px solid var(--border)',
@@ -456,8 +547,6 @@ const S = {
     transition: 'box-shadow 0.2s',
   },
   recCardList: { flexDirection: 'row' },
-
-  /* Score badge */
   scoreBadge: {
     padding: '20px 20px 16px',
     background: 'var(--bg-subtle)',
@@ -477,8 +566,6 @@ const S = {
     display: 'inline-block',
   },
   scoreMatchLbl: { fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 },
-
-  /* Card body */
   recBody: {
     padding: '18px 20px',
     display: 'flex', flexDirection: 'column', gap: 10, flex: 1,
@@ -496,8 +583,22 @@ const S = {
     display: '-webkit-box', WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
-
-  /* Skills */
+  criticalGapBox: {
+    padding: '10px 12px',
+    borderRadius: 10,
+    background: '#fff5f5',
+    border: '1px solid #fecaca',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  criticalGapTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#b91c1c',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
   skillTags: { display: 'flex', flexWrap: 'wrap', gap: 6 },
   skillTag: {
     padding: '3px 10px', borderRadius: 7,
@@ -505,8 +606,12 @@ const S = {
     color: '#7c3aed', background: 'rgba(124,58,237,0.08)',
     border: '1px solid rgba(124,58,237,0.15)',
   },
-
-  /* Meta */
+  criticalSkillTag: {
+    padding: '3px 10px', borderRadius: 7,
+    fontSize: 11.5, fontWeight: 700,
+    color: '#b91c1c', background: '#fee2e2',
+    border: '1px solid #fca5a5',
+  },
   recMeta: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   metaPill: {
     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -514,8 +619,6 @@ const S = {
     fontSize: 11.5, fontWeight: 500, color: 'var(--text-muted)',
     background: 'var(--bg-subtle)', border: '1px solid var(--border-light)',
   },
-
-  /* View btn */
   viewBtn: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
     marginTop: 4, padding: '10px',
@@ -525,8 +628,6 @@ const S = {
     transition: 'all 0.15s', fontFamily: "'Inter', sans-serif",
     width: '100%',
   },
-
-  /* Loading skeletons */
   loadWrap: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -538,8 +639,6 @@ const S = {
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.5s infinite',
   },
-
-  /* Compact */
   compactWrap: {
     padding: 20, borderRadius: 18,
     background: 'rgba(124,58,237,0.04)',
@@ -559,8 +658,19 @@ const S = {
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     flexShrink: 0,
   },
+  compactActionBtn: {
+    border: '1px solid var(--border)',
+    background: 'var(--bg-subtle)',
+    color: 'var(--text-body)',
+    borderRadius: 8,
+    padding: '6px 10px',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    flexShrink: 0,
+    fontFamily: "'Inter', sans-serif",
+  },
   emptySmall: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' },
-
   refreshBtn: {
     width: 30, height: 30, borderRadius: 8,
     background: 'transparent', border: '1px solid var(--border)',

@@ -18,12 +18,10 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
     if (allowedRoles && !allowedRoles.includes(user.role)) {
         // Redirection if unauthorized role
-        if (user.role === 'HR') {
+        if (user.role === 'HR' || user.role === 'admin') {
             return <Navigate to="/rh/dashboard" replace />;
         } else if (user.role === 'candidat') {
             return <Navigate to="/tests" replace />;
-        } else if (user.role === 'admin') {
-            return <Navigate to="/admin" replace />;
         }
         return <Navigate to="/" replace />;
     }

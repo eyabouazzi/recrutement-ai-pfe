@@ -21,6 +21,13 @@ const proctoringTelemetrySchema = new mongoose.Schema({
     fullscreenExitCount: { type: Number, default: 0, min: 0 },
 }, { _id: false });
 
+const questionIntegritySchema = new mongoose.Schema({
+    dwellSeconds: { type: Number, default: 0, min: 0 },
+    keystrokes: { type: Number, default: 0, min: 0 },
+    backspaces: { type: Number, default: 0, min: 0 },
+    pastes: { type: Number, default: 0, min: 0 },
+}, { _id: false });
+
 const deviceFingerprintSchema = new mongoose.Schema({
     userAgent: { type: String, default: '' },
     ip: { type: String, default: '' },
@@ -41,6 +48,40 @@ const submissionSchema = new mongoose.Schema({
         ref: 'Users',
         required: true,
         index: true,
+    },
+    applicationCvUrl: {
+        type: String,
+        default: '',
+    },
+    applicationCvOriginalName: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    applicationCvText: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    jobMatchAnalysis: {
+        score: { type: Number, min: 0, max: 100, default: null },
+        confidence: { type: String, default: '' },
+        summary: { type: String, default: '' },
+        matchedSkills: [{ type: String, trim: true }],
+        missingSkills: [{ type: String, trim: true }],
+        extraSkills: [{ type: String, trim: true }],
+        matchingSignals: [{ type: String, trim: true }],
+        recruiterRecommendations: [{ type: String, trim: true }],
+        candidateActionPlan: { type: mongoose.Schema.Types.Mixed, default: null },
+        roleAlignment: { type: String, default: '' },
+        experienceAlignment: { type: String, default: '' },
+        requiredExperienceLevel: { type: String, default: '' },
+        detectedCandidateLevel: { type: String, default: '' },
+        lastCalculatedAt: { type: Date },
+        /** Enriched CV signals (education, certs, languages, etc.) */
+        enrichedCvSignals: { type: mongoose.Schema.Types.Mixed, default: null },
+        /** Moteur v2 : dimensions, radar, constellation, insights créatifs (non strict pour évolution) */
+        matchEngine: { type: mongoose.Schema.Types.Mixed, default: null },
     },
     answers: [answerSchema],
     totalScore: {
@@ -72,6 +113,37 @@ const submissionSchema = new mongoose.Schema({
         enum: ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'],
         default: 'NEW',
     },
+    stageHistory: [{
+        fromStage: {
+            type: String,
+            enum: ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED', null],
+            default: null,
+        },
+        toStage: {
+            type: String,
+            enum: ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'],
+            required: true,
+        },
+        changedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Users',
+            default: null,
+        },
+        changedAt: {
+            type: Date,
+            default: Date.now,
+        },
+        source: {
+            type: String,
+            enum: ['system', 'hr', 'candidate'],
+            default: 'system',
+        },
+        note: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+    }],
     notes: [{
         text: String,
         author: {
@@ -89,6 +161,13 @@ const submissionSchema = new mongoose.Schema({
         severity: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
         detail: { type: String, default: '' },
     }],
+    plagiarismReport: {
+        score: { type: Number, default: 0, min: 0, max: 100 },
+        level: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
+        duplicatePairs: { type: Number, default: 0, min: 0 },
+        maxSimilarity: { type: Number, default: 0, min: 0, max: 1 },
+        suspiciousPhrases: [{ type: String, trim: true }],
+    },
     cheatingFlags: [{
         code: { type: String },
         severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'low' },
@@ -115,8 +194,22 @@ const submissionSchema = new mongoose.Schema({
         submittedAt: { type: Date, default: Date.now },
         elapsedSeconds: { type: Number, default: null },
         telemetry: { type: proctoringTelemetrySchema, default: () => ({}) },
+        questionTimeline: { type: Map, of: questionIntegritySchema, default: {} },
     },
 }, { timestamps: true });
+
+submissionSchema.pre('save', function stageHistoryBootstrap() {
+    if (this.isNew && (!Array.isArray(this.stageHistory) || this.stageHistory.length === 0)) {
+        this.stageHistory = [{
+            fromStage: null,
+            toStage: this.stage || 'NEW',
+            changedBy: this.candidateId || null,
+            source: 'system',
+            changedAt: new Date(),
+            note: 'Initial submission stage',
+        }];
+    }
+});
 
 const Submission = mongoose.model('Submission', submissionSchema);
 module.exports = Submission;

@@ -22,6 +22,88 @@ function cleanJsonResponse(str) {
     }
 }
 
+function isRecoverableOpenAiError(error) {
+    return error?.status === 429 ||
+        error?.status === 503 ||
+        error?.code === 'insufficient_quota' ||
+        error?.code === 'rate_limit_exceeded';
+}
+
+function evaluateAnswersFallback(jobRole, questionsAndAnswersStr, evaluationCriteria = '') {
+    const pairs = String(questionsAndAnswersStr || '')
+        .split(/\n\s*\n/)
+        .map((chunk) => chunk.trim())
+        .filter(Boolean);
+
+    const answers = pairs
+        .map((chunk) => {
+            const match = chunk.match(/A:\s*([\s\S]*)$/i);
+            return match ? match[1].trim() : '';
+        })
+        .filter(Boolean);
+
+    if (answers.length === 0) {
+        return {
+            score: 0,
+            feedback: 'Evaluation automatique de secours: aucune reponse ouverte exploitable n a ete detectee.',
+            competencies: [],
+        };
+    }
+
+    const totalChars = answers.reduce((sum, answer) => sum + answer.length, 0);
+    const avgChars = totalChars / answers.length;
+    const longAnswers = answers.filter((answer) => answer.length >= 180).length;
+    const detailedRatio = longAnswers / answers.length;
+    const criteriaSkills = Array.from(new Set(
+        String(evaluationCriteria || '')
+            .toLowerCase()
+            .match(/[a-z0-9+#/.]{3,}/g) || []
+    ));
+    const criteriaHits = criteriaSkills.filter((token) =>
+        answers.some((answer) => answer.toLowerCase().includes(token))
+    ).length;
+    const criteriaCoverage = criteriaSkills.length > 0 ? criteriaHits / Math.min(criteriaSkills.length, 8) : 0.5;
+
+    const score = Math.round(Math.max(
+        15,
+        Math.min(
+            78,
+            24 +
+            Math.min(26, avgChars / 8) +
+            detailedRatio * 18 +
+            Math.min(10, answers.length * 2) +
+            criteriaCoverage * 18
+        )
+    ));
+
+    const strengths = [];
+    if (avgChars >= 140) strengths.push('reponses detaillees');
+    if (detailedRatio >= 0.5) strengths.push('niveau de detail correct');
+    if (criteriaCoverage >= 0.45) strengths.push('prise en compte partielle des criteres du poste');
+
+    const improvements = [];
+    if (avgChars < 90) improvements.push('developper davantage les explications');
+    if (detailedRatio < 0.4) improvements.push('ajouter plus de details techniques et d exemples');
+    if (criteriaCoverage < 0.35 && criteriaSkills.length > 0) improvements.push('mieux couvrir les competences attendues');
+
+    return {
+        score,
+        feedback: `Evaluation automatique de secours pour le poste "${jobRole}". Points positifs: ${strengths.join(', ') || 'quelques reponses exploitables'}. A renforcer: ${improvements.join(', ') || 'preciser davantage les reponses avec des exemples concrets'}.`,
+        competencies: [
+            {
+                competency: 'Communication ecrite',
+                score: Math.round(Math.max(20, Math.min(85, 30 + avgChars / 3))),
+                comment: avgChars >= 120 ? 'Reponses globalement structurees.' : 'Reponses trop courtes ou peu developpees.',
+            },
+            {
+                competency: 'Pertinence metier',
+                score: Math.round(Math.max(20, Math.min(82, 25 + criteriaCoverage * 55))),
+                comment: criteriaCoverage >= 0.45 ? 'Les attentes du poste apparaissent partiellement dans les reponses.' : 'Les attentes du poste sont peu visibles dans les reponses.',
+            },
+        ],
+    };
+}
+
 /**
  * Fallback: generate role-aware QCM questions without OpenAI
  * Uses a keyword-matched question bank so questions are always relevant.
@@ -343,6 +425,10 @@ Return ONLY a valid JSON object. No other text. Structure:
                 competencies,
             };
         } catch (error) {
+            if (isRecoverableOpenAiError(error)) {
+                console.warn("OpenAI grading unavailable, using fallback evaluator.");
+                return evaluateAnswersFallback(jobRole, questionsAndAnswersStr, evaluationCriteria);
+            }
             console.error("OpenAI Grading Error:", error);
             throw new Error(error.message || "Failed to grade using AI.");
         }

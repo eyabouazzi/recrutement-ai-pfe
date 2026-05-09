@@ -43,6 +43,8 @@ const interviewSchema = new Schema(
 
         rescheduleCount: { type: Number, default: 0, min: 0 },
         notes: { type: String, default: '' },
+        location: { type: String, default: '' },     // meeting link or physical address
+        messageToCandidate: { type: String, default: '' }, // HR message shown to candidate
     },
     { timestamps: true }
 );

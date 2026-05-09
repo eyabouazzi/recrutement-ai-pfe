@@ -24,6 +24,12 @@ const notificationSchema = new mongoose.Schema({
         enum: ['low', 'normal', 'high', 'urgent'],
         default: 'normal',
     },
+    targetRole: {
+        type: String,
+        enum: ['HR', 'candidat', 'all'],
+        default: 'all',
+        index: true,
+    },
     title: {
         type: String,
         required: true,
@@ -62,6 +68,7 @@ const notificationSchema = new mongoose.Schema({
 notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, archived: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, actionKey: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, targetRole: 1, read: 1, createdAt: -1 });
 
 const AppNotification = mongoose.model('AppNotification', notificationSchema);
 module.exports = AppNotification;

@@ -1,4 +1,5 @@
 const ContactLead = require('../models/contactLead.model');
+const sendEmail = require('../utils/mailer');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -47,6 +48,26 @@ exports.submitLead = async (req, res) => {
       source: 'website',
       meta,
     });
+
+    try {
+      const hrEmail = process.env.SMTP_USER;
+      if (hrEmail) {
+        const subjectMap = {
+          contact: 'Nouvelle demande de contact',
+          demo: 'Nouvelle demande de démo',
+          newsletter: 'Nouvel inscrit à la newsletter'
+        };
+        
+        await sendEmail({
+          email: hrEmail,
+          subject: `${subjectMap[type] || 'Nouveau message'} - RecruitAI`,
+          content: `Une nouvelle demande vient d'être soumise sur le site.\n\nType: ${type}\nNom: ${name || 'Non spécifié'}\nEntreprise: ${company || 'Non spécifié'}\nEmail: ${email}\nMessage:\n${message}\n\nConsultez le tableau de bord pour plus de détails.`
+        });
+      }
+    } catch (emailErr) {
+      console.error('Erreur lors de l\'envoi de la notification RH:', emailErr);
+      // We don't block the response if the notification email fails
+    }
 
     const messages = {
       contact: 'Message envoyé. Notre équipe vous répondra sous 2 jours ouvrés.',

@@ -9,7 +9,7 @@ const sendEmail = require('../utils/mailer');
 async function getCompanies(req, res) {
     try {
         const { search, sector, city, size, sort = 'recent', featured, page = 1, limit = 12 } = req.query;
-        const query = { status: 'approved' };
+        const query = {};
 
         if (search) {
             query.$or = [
@@ -129,7 +129,7 @@ async function getCompanyById(req, res) {
             .populate('hrUsers', 'firstName lastName avatar')
             .lean();
 
-        if (!company || company.status !== 'approved') {
+        if (!company) {
             return res.status(404).json({ status: false, message: 'Entreprise introuvable.' });
         }
 

@@ -14,6 +14,11 @@ export async function getTestDraft(testId) {
     return response.data;
 }
 
+export async function getMyDrafts() {
+    const response = await axiosClient.get('/submission/drafts');
+    return response.data;
+}
+
 export async function saveTestDraft(testId, payload) {
     const response = await axiosClient.put(`/submission/draft/${testId}`, payload);
     return response.data;
@@ -71,6 +76,15 @@ export async function updateSubmissionStage(id, stage) {
         return response.data;
     } catch (error) {
         throw new Error(error.response?.data?.message || 'Failed to update candidate stage');
+    }
+}
+
+export async function bulkUpdateSubmissionStage(submissionIds, stage) {
+    try {
+        const response = await axiosClient.patch('/submission/bulk/stage', { submissionIds, stage });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to bulk update candidate stages');
     }
 }
 

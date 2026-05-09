@@ -1,248 +1,256 @@
 import axiosClient from "../utils/axiosClient";
 
-// Enhanced dashboard API with real database connections
-export async function fetchDashboardStats() {
-    try {
-        // Fetch real statistics from multiple sources
-        const [usersResponse, testsResponse, submissionsResponse] = await Promise.all([
-            axiosClient.get('/user/'),
-            axiosClient.get('/test/'),
-            axiosClient.get('/submission/all')
-        ]);
+const SCORE_BUCKETS = [
+    { range: '0-20', min: 0, max: 20, color: '#ef4444' },
+    { range: '21-40', min: 21, max: 40, color: '#f97316' },
+    { range: '41-60', min: 41, max: 60, color: '#f59e0b' },
+    { range: '61-80', min: 61, max: 80, color: '#22c55e' },
+    { range: '81-100', min: 81, max: 100, color: '#10b981' },
+];
 
-        const users = usersResponse.data.users || [];
-        const tests = testsResponse.data.tests || [];
-        const submissions = submissionsResponse.data.submissions || [];
+const PIPELINE_ORDER = ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
 
-        // Calculate real statistics
-        const totalCandidates = users.filter(user => user.role === 'candidat').length;
-        const completedTests = submissions.length;
-        const pendingTests = totalCandidates - completedTests;
-        const successRate = completedTests > 0 
-            ? Math.round((submissions.filter(s => s.score >= 70).length / completedTests) * 100)
-            : 0;
-
-        return {
-            totalCandidates,
-            completedTests,
-            pendingTests,
-            successRate,
-            avgTimeToHire: 12, // This would come from a more complex calculation
-            offersSent: submissions.filter(s => s.stage === 'offer_sent').length,
-            hired: submissions.filter(s => s.stage === 'hired').length,
-            totalTests: tests.length,
-            activeTests: tests.filter(t => t.status === 'active').length
-        };
-    } catch (error) {
-        console.error('Failed to fetch dashboard stats:', error);
-        // Return mock data as fallback
-        return {
-            totalCandidates: 0,
-            completedTests: 0,
-            pendingTests: 0,
-            successRate: 0,
-            avgTimeToHire: 0,
-            offersSent: 0,
-            hired: 0,
-            totalTests: 0,
-            activeTests: 0
-        };
-    }
+function toNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-// Fetch real-time candidate data
-export async function fetchCandidateStats() {
-    try {
-        const response = await axiosClient.get('/user/');
-        const users = response.data.users || [];
-        
-        const candidates = users.filter(user => user.role === 'candidat');
-        
-        // Group by registration date for trend analysis
-        const weeklyStats = candidates.reduce((acc, candidate) => {
-            const week = new Date(candidate.createdAt).toISOString().split('T')[0]; // Simplified week grouping
-            acc[week] = (acc[week] || 0) + 1;
-            return acc;
-        }, {});
-
-        return {
-            total: candidates.length,
-            bySource: {
-                direct: Math.floor(candidates.length * 0.4),
-                referral: Math.floor(candidates.length * 0.3),
-                jobBoard: Math.floor(candidates.length * 0.3)
-            },
-            weeklyGrowth: weeklyStats,
-            demographics: {
-                male: Math.floor(candidates.length * 0.55),
-                female: Math.floor(candidates.length * 0.45)
-            }
-        };
-    } catch (error) {
-        console.error('Failed to fetch candidate stats:', error);
-        return {
-            total: 0,
-            bySource: { direct: 0, referral: 0, jobBoard: 0 },
-            weeklyGrowth: {},
-            demographics: { male: 0, female: 0 }
-        };
-    }
+function normalizeScore(submission) {
+    return toNumber(
+        submission?.totalScore ??
+        submission?.score ??
+        submission?.matchScore ??
+        0,
+        0
+    );
 }
 
-// Fetch test performance analytics
-export async function fetchTestAnalytics() {
-    try {
-        const [testsResponse, submissionsResponse] = await Promise.all([
-            axiosClient.get('/test/'),
-            axiosClient.get('/submission/all')
-        ]);
+function normalizeStage(stage) {
+    const normalized = String(stage || 'NEW').trim().toUpperCase();
+    return PIPELINE_ORDER.includes(normalized) ? normalized : 'NEW';
+}
 
-        const tests = testsResponse.data.tests || [];
-        const submissions = submissionsResponse.data.submissions || [];
+function formatStageLabel(stage) {
+    const labels = {
+        NEW: 'Nouveaux',
+        SCREENING: 'Screening',
+        INTERVIEW: 'Entretien',
+        OFFER: 'Offre',
+        HIRED: 'Embauches',
+        REJECTED: 'Rejetes',
+    };
+    return labels[stage] || stage;
+}
 
-        const testPerformance = tests.map(test => {
-            const testSubmissions = submissions.filter(sub => sub.testId?._id === test._id);
-            const avgScore = testSubmissions.length > 0 
-                ? Math.round(testSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / testSubmissions.length)
-                : 0;
-            const completionRate = test.questions?.length > 0 
-                ? Math.round((testSubmissions.length / test.questions.length) * 100)
-                : 0;
-
+function buildRecentActivity(submissions = []) {
+    return submissions
+        .slice()
+        .sort((left, right) => new Date(right?.updatedAt || 0) - new Date(left?.updatedAt || 0))
+        .slice(0, 10)
+        .map((submission) => {
+            const candidate = submission?.candidateId || {};
+            const firstName = String(candidate?.firstName || '').trim();
+            const lastName = String(candidate?.lastName || '').trim();
+            const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.trim() || 'CA';
             return {
-                id: test._id,
-                title: test.title,
-                jobRole: test.jobRole,
-                avgScore,
-                completionRate,
-                totalSubmissions: testSubmissions.length,
-                difficulty: test.difficulty
+                id: submission?._id,
+                user: `${firstName} ${lastName}`.trim() || 'Candidat anonyme',
+                test: submission?.testId?.title || 'Test inconnu',
+                score: normalizeScore(submission),
+                timestamp: submission?.updatedAt || submission?.createdAt || null,
+                avatar: initials,
+                stage: normalizeStage(submission?.stage),
+                trustScore: toNumber(submission?.trustScore, 100),
             };
         });
-
-        return {
-            tests: testPerformance,
-            overallAvgScore: testPerformance.length > 0 
-                ? Math.round(testPerformance.reduce((sum, test) => sum + test.avgScore, 0) / testPerformance.length)
-                : 0,
-            highestPerforming: testPerformance.sort((a, b) => b.avgScore - a.avgScore).slice(0, 3),
-            lowestPerforming: testPerformance.sort((a, b) => a.avgScore - b.avgScore).slice(0, 3)
-        };
-    } catch (error) {
-        console.error('Failed to fetch test analytics:', error);
-        return {
-            tests: [],
-            overallAvgScore: 0,
-            highestPerforming: [],
-            lowestPerforming: []
-        };
-    }
 }
 
-// Fetch recruitment pipeline data
-export async function fetchPipelineData() {
-    try {
-        const [submissionsResponse, usersResponse] = await Promise.all([
-            axiosClient.get('/submission/all'),
-            axiosClient.get('/user/')
-        ]);
+function buildTopTests(tests = [], submissions = []) {
+    return tests
+        .map((test) => {
+            const testSubmissions = submissions.filter((submission) => String(submission?.testId?._id || submission?.testId) === String(test?._id));
+            const submissionsCount = testSubmissions.length;
+            const averageScore = submissionsCount > 0
+                ? Math.round(testSubmissions.reduce((sum, submission) => sum + normalizeScore(submission), 0) / submissionsCount)
+                : 0;
+            const qualifiedCount = testSubmissions.filter((submission) => submission?.qualified === true).length;
+            const passRate = submissionsCount > 0 ? Math.round((qualifiedCount / submissionsCount) * 100) : 0;
+            return {
+                id: test?._id,
+                title: test?.title || 'Test sans titre',
+                jobRole: test?.jobRole || '',
+                status: String(test?.status || '').toUpperCase(),
+                submissionsCount,
+                averageScore,
+                passRate,
+            };
+        })
+        .sort((left, right) => {
+            if (right.submissionsCount !== left.submissionsCount) {
+                return right.submissionsCount - left.submissionsCount;
+            }
+            return right.averageScore - left.averageScore;
+        })
+        .slice(0, 5);
+}
 
-        const submissions = submissionsResponse.data.submissions || [];
-        const users = usersResponse.data.users || [];
+function buildFallbackPayload(tests = [], submissions = []) {
+    const uniqueCandidateIds = new Set(
+        submissions
+            .map((submission) => String(submission?.candidateId?._id || submission?.candidateId || ''))
+            .filter(Boolean)
+    );
+    const scoreValues = submissions.map(normalizeScore);
+    const averageScore = scoreValues.length > 0
+        ? Math.round(scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length)
+        : 0;
+    const qualifiedCount = submissions.filter((submission) => submission?.qualified === true).length;
+    const successRate = submissions.length > 0
+        ? Math.round((qualifiedCount / submissions.length) * 100)
+        : 0;
+    const averageMatchScore = submissions.length > 0
+        ? Math.round(submissions.reduce((sum, submission) => sum + toNumber(submission?.jobMatchAnalysis?.score, 0), 0) / submissions.length)
+        : 0;
+    const averageTrustScore = submissions.length > 0
+        ? Math.round(submissions.reduce((sum, submission) => sum + toNumber(submission?.trustScore, 100), 0) / submissions.length)
+        : 100;
+    const timedSubmissions = submissions.filter((submission) => toNumber(submission?.antiCheat?.elapsedSeconds, 0) > 0);
+    const avgCompletionMinutes = timedSubmissions.length > 0
+        ? Math.round(
+            timedSubmissions.reduce((sum, submission) => sum + (toNumber(submission?.antiCheat?.elapsedSeconds, 0) / 60), 0) / timedSubmissions.length
+        )
+        : 0;
+    const highRiskCount = submissions.filter((submission) => toNumber(submission?.trustScore, 100) < 60).length;
 
-        // Group submissions by stage
-        const pipelineStages = {
-            'new': submissions.filter(s => s.stage === 'new' || !s.stage).length,
-            'in_assessment': submissions.filter(s => s.stage === 'in_assessment').length,
-            'interview_scheduled': submissions.filter(s => s.stage === 'interview_scheduled').length,
-            'offer_pending': submissions.filter(s => s.stage === 'offer_pending').length,
-            'offer_accepted': submissions.filter(s => s.stage === 'offer_accepted').length,
-            'hired': submissions.filter(s => s.stage === 'hired').length
-        };
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const submissionsLast7Days = submissions.filter((submission) => {
+        const createdAt = new Date(submission?.createdAt || 0).getTime();
+        return Number.isFinite(createdAt) && now - createdAt <= sevenDaysMs;
+    }).length;
+    const previousWindowCount = submissions.filter((submission) => {
+        const createdAt = new Date(submission?.createdAt || 0).getTime();
+        return Number.isFinite(createdAt) && now - createdAt > sevenDaysMs && now - createdAt <= sevenDaysMs * 2;
+    }).length;
+    const submissionsTrend = previousWindowCount > 0
+        ? Math.round(((submissionsLast7Days - previousWindowCount) / previousWindowCount) * 100)
+        : submissionsLast7Days > 0 ? 100 : 0;
 
-        // Calculate conversion rates
-        const totalSubmissions = submissions.length;
-        const conversionRates = {
-            applicationToAssessment: totalSubmissions > 0 
-                ? Math.round((pipelineStages.in_assessment / totalSubmissions) * 100)
-                : 0,
-            assessmentToInterview: pipelineStages.in_assessment > 0
-                ? Math.round((pipelineStages.interview_scheduled / pipelineStages.in_assessment) * 100)
-                : 0,
-            interviewToOffer: pipelineStages.interview_scheduled > 0
-                ? Math.round((pipelineStages.offer_pending / pipelineStages.interview_scheduled) * 100)
-                : 0,
-            offerToHire: pipelineStages.offer_pending > 0
-                ? Math.round((pipelineStages.hired / pipelineStages.offer_pending) * 100)
-                : 0
-        };
+    const stageCounts = PIPELINE_ORDER.reduce((acc, stage) => {
+        acc[stage] = 0;
+        return acc;
+    }, {});
+    submissions.forEach((submission) => {
+        stageCounts[normalizeStage(submission?.stage)] += 1;
+    });
 
-        return {
-            stages: pipelineStages,
-            conversionRates,
-            totalCandidates: users.filter(u => u.role === 'candidat').length,
-            activeSubmissions: totalSubmissions
-        };
-    } catch (error) {
-        console.error('Failed to fetch pipeline data:', error);
-        return {
-            stages: {
-                'new': 0,
-                'in_assessment': 0,
-                'interview_scheduled': 0,
-                'offer_pending': 0,
-                'offer_accepted': 0,
-                'hired': 0
-            },
+    return {
+        status: true,
+        stats: {
+            totalCandidates: uniqueCandidateIds.size,
+            completedTests: submissions.length,
+            totalTests: tests.length,
+            activeTests: tests.filter((test) => String(test?.status || '').toUpperCase() === 'PUBLISHED').length,
+            draftTests: tests.filter((test) => String(test?.status || '').toUpperCase() === 'DRAFT').length,
+            closedTests: tests.filter((test) => String(test?.status || '').toUpperCase() === 'CLOSED').length,
+            pendingTests: stageCounts.NEW + stageCounts.SCREENING,
+            successRate,
+            qualifiedCount,
+            hired: stageCounts.HIRED,
+            offersSent: stageCounts.OFFER,
+            averageScore,
+            averageMatchScore,
+            averageTrustScore,
+            avgCompletionMinutes,
+            highRiskCount,
+            submissionsLast7Days,
+            submissionsTrend,
+            scoreDistribution: SCORE_BUCKETS.map((bucket) => ({
+                ...bucket,
+                count: scoreValues.filter((score) => score >= bucket.min && score <= bucket.max).length,
+            })),
+            topTests: buildTopTests(tests, submissions),
+        },
+        pipeline: {
+            stages: stageCounts,
+            formattedStages: PIPELINE_ORDER.map((stage) => ({
+                key: stage,
+                label: formatStageLabel(stage),
+                count: stageCounts[stage],
+            })),
             conversionRates: {
-                applicationToAssessment: 0,
-                assessmentToInterview: 0,
-                interviewToOffer: 0,
-                offerToHire: 0
+                applicationToAssessment: stageCounts.NEW > 0 ? Math.round((stageCounts.SCREENING / stageCounts.NEW) * 100) : 0,
+                assessmentToInterview: stageCounts.SCREENING > 0 ? Math.round((stageCounts.INTERVIEW / stageCounts.SCREENING) * 100) : 0,
+                interviewToOffer: stageCounts.INTERVIEW > 0 ? Math.round((stageCounts.OFFER / stageCounts.INTERVIEW) * 100) : 0,
+                offerToHire: stageCounts.OFFER > 0 ? Math.round((stageCounts.HIRED / stageCounts.OFFER) * 100) : 0,
             },
-            totalCandidates: 0,
-            activeSubmissions: 0
-        };
-    }
+            totalCandidates: uniqueCandidateIds.size,
+            activeSubmissions: submissions.length,
+        },
+        recentActivity: buildRecentActivity(submissions),
+    };
 }
 
-// Fetch recent activity feed
+async function fetchFallbackHrDashboard() {
+    const [testsResponse, submissionsResponse] = await Promise.all([
+        axiosClient.get('/test/'),
+        axiosClient.get('/submission/all'),
+    ]);
+
+    return buildFallbackPayload(
+        Array.isArray(testsResponse?.data?.tests) ? testsResponse.data.tests : [],
+        Array.isArray(submissionsResponse?.data?.submissions) ? submissionsResponse.data.submissions : [],
+    );
+}
+
+async function fetchHrDashboard() {
+    return fetchFallbackHrDashboard();
+}
+
+export async function fetchDashboardStats() {
+    const payload = await fetchHrDashboard();
+    return payload?.stats || {};
+}
+
+export async function fetchCandidateStats() {
+    const payload = await fetchHrDashboard();
+    return {
+        total: payload?.stats?.totalCandidates || 0,
+        activeCandidates: payload?.pipeline?.totalCandidates || 0,
+    };
+}
+
+export async function fetchTestAnalytics() {
+    const payload = await fetchHrDashboard();
+    const tests = Array.isArray(payload?.stats?.topTests) ? payload.stats.topTests : [];
+    return {
+        tests,
+        overallAvgScore: payload?.stats?.averageScore || 0,
+        highestPerforming: tests.slice().sort((left, right) => (right.averageScore || 0) - (left.averageScore || 0)).slice(0, 3),
+        lowestPerforming: tests.slice().sort((left, right) => (left.averageScore || 0) - (right.averageScore || 0)).slice(0, 3),
+    };
+}
+
+export async function fetchPipelineData() {
+    const payload = await fetchHrDashboard();
+    return payload?.pipeline || {
+        stages: {},
+        formattedStages: [],
+        conversionRates: {},
+        totalCandidates: 0,
+        activeSubmissions: 0,
+    };
+}
+
 export async function fetchRecentActivity() {
-    try {
-        const [submissionsResponse, usersResponse] = await Promise.all([
-            axiosClient.get('/submission/all'),
-            axiosClient.get('/user/')
-        ]);
-
-        const submissions = submissionsResponse.data.submissions || [];
-        const users = usersResponse.data.users || [];
-
-        // Create activity feed from recent submissions
-        const recentActivities = submissions
-            .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-            .slice(0, 10)
-            .map(submission => {
-                const candidate = users.find(u => u._id === submission.candidateId?._id);
-                return {
-                    id: submission._id,
-                    type: 'submission',
-                    action: 'test_completed',
-                    user: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'Candidat anonyme',
-                    test: submission.testId?.title || 'Test inconnu',
-                    score: submission.score,
-                    timestamp: submission.updatedAt,
-                    avatar: candidate ? candidate.firstName.charAt(0) + candidate.lastName.charAt(0) : 'CA'
-                };
-            });
-
-        return recentActivities;
-    } catch (error) {
-        console.error('Failed to fetch recent activity:', error);
-        return [];
-    }
+    const payload = await fetchHrDashboard();
+    return Array.isArray(payload?.recentActivity) ? payload.recentActivity : [];
 }
 
-// Named alias — AnalyticsCharts.jsx imports this name
 export async function getDashboardStats() {
-    return fetchDashboardStats();
+    const payload = await fetchHrDashboard();
+    return {
+        status: Boolean(payload?.status),
+        stats: payload?.stats || {},
+    };
 }

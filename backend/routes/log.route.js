@@ -9,9 +9,9 @@ const {
     getLogStatistics 
 } = require('../controllers/log.controller');
 
-// All log routes require authentication and admin access
+// All log routes require authentication and HR access
 router.use(protect);
-router.use(restrictTo('admin'));
+router.use(restrictTo('HR'));
 
 // GET routes
 router.get('/', getLogs);

@@ -1,4 +1,33 @@
+/* ── Tailwind directives ─────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Custom component classes (used by Home.jsx dark theme) ──── */
+@layer components {
+  .glass-panel {
+    @apply border border-white/10 bg-white/[0.04] backdrop-blur-xl;
+  }
+
+  .glass-panel-strong {
+    @apply border border-white/[0.12] bg-white/[0.07] backdrop-blur-2xl;
+  }
+
+  .glow-ring {
+    @apply ring-1 ring-cyan-300/30 shadow-[0_0_24px_rgba(34,211,238,0.18)];
+  }
+
+  .section-headline {
+    @apply font-display text-2xl font-bold tracking-tight text-white sm:text-3xl;
+  }
+
+  .section-subtext {
+    @apply text-sm leading-relaxed text-slate-300 sm:text-base;
+  }
+}
+
 /* Accessibilité — mode contraste renforcé (préférence utilisateur, page test) */
+
 .take-test-a11y .ant-card {
     border: 2px solid #1f2937;
 }
@@ -16,10 +45,10 @@
 /* Light Theme Variables */
 :root {
     /* VanillaHR Palette */
-    --purple: #7c3aed;
-    --purple-hover: #6d28d9;
-    --purple-light: #f3e8ff;
-    --purple-soft: #fbf7ff;
+    --purple: #4f46e5;
+    --purple-hover: #4338ca;
+    --purple-light: #e0e7ff;
+    --purple-soft: #f4f6ff;
 
     /* Legacy layout variables (used by RH/Admin shells) */
     /* Keep them aligned to the new premium purple/teal design */
@@ -27,18 +56,18 @@
     --navy-light: #111827;
     --navy-muted: #334155;
 
-    --blue: #7c3aed;
-    --blue-dark: #6d28d9;
-    --blue-light: #a78bfa;
+    --blue: #4f46e5;
+    --blue-dark: #3730a3;
+    --blue-light: #60a5fa;
     --blue-bg: #0f172a;
 
-    --accent: #a78bfa;
-    --accent-soft: #312e81;
+    --accent: #0891b2;
+    --accent-soft: #0f766e;
     
     /* Surface & Backgrounds */
     --bg-white: #ffffff;
-    --bg-light: #f7f7ff;
-    --bg-subtle: #f5f3ff;
+    --bg-light: #f6f8ff;
+    --bg-subtle: #eef4ff;
     --bg-section: #ffffff;
 
     /* Text */
@@ -48,13 +77,13 @@
     --text-light: #94a3b8;
 
     /* Borders */
-    --border: #e6e4ff;
-    --border-light: #f1efff;
+    --border: #dbe3f3;
+    --border-light: #eaf0fb;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 rgba(17, 24, 39, 0.06);
-    --shadow-md: 0 10px 30px -18px rgba(124, 58, 237, 0.22), 0 6px 18px -14px rgba(6, 182, 212, 0.16);
-    --shadow-lg: 0 18px 50px -28px rgba(124, 58, 237, 0.26), 0 10px 26px -22px rgba(6, 182, 212, 0.16);
+    --shadow-md: 0 10px 30px -18px rgba(79, 70, 229, 0.24), 0 6px 18px -14px rgba(8, 145, 178, 0.18);
+    --shadow-lg: 0 18px 50px -28px rgba(79, 70, 229, 0.28), 0 10px 26px -22px rgba(8, 145, 178, 0.2);
 
     /* Radii */
     --r-sm: 8px;
@@ -65,47 +94,6 @@
     /* Transitions */
     --t-fast: 0.2s ease;
     --t-medium: 0.3s ease;
-}
-
-/* Dark Theme Variables */
-.dark {
-    --navy: #f1f5f9;
-    --navy-light: #e2e8f0;
-    --navy-muted: #cbd5e1;
-    
-    --blue: #60a5fa;
-    --blue-dark: #3b82f6;
-    --blue-light: #93c5fd;
-    --blue-bg: #1e293b;
-    
-    --accent: #a78bfa;
-    --accent-soft: #312e81;
-    
-    /* Surface & Backgrounds */
-    --bg-white: #1e293b;
-    --bg-light: #070a13;
-    --bg-subtle: #0b1220;
-    --bg-navy: #f1f5f9;
-    --bg-section: #0b1220;
-
-    /* Text */
-    --text-heading: #f8fafc;
-    --text-body: #e5e7eb;
-    --text-muted: #cbd5e1;
-    --text-light: #94a3b8;
-    --text-on-navy: #0f172a;
-
-    /* Borders */
-    --border: #2b3552;
-    --border-light: #1e293b;
-
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 18px 55px -35px rgba(124, 58, 237, 0.42), 0 8px 26px -22px rgba(6, 182, 212, 0.24);
-    --shadow-lg: 0 28px 85px -55px rgba(124, 58, 237, 0.52), 0 16px 50px -40px rgba(6, 182, 212, 0.24);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
-    --shadow-blue: 0 4px 14px 0 rgba(59, 130, 246, 0.3);
-    --shadow-purple: 0 4px 14px 0 rgba(167, 139, 250, 0.3);
 }
 
 /* =============================================
@@ -132,6 +120,16 @@ body {
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+    background: rgba(79, 70, 229, 0.18);
+    color: #0b1020;
+}
+
+:where(button, [role='button'], a, input, textarea, select, .ant-btn, .ant-input, .ant-select-selector):focus-visible {
+    outline: 3px solid rgba(79, 70, 229, 0.32);
+    outline-offset: 2px;
 }
 
 /* =============================================

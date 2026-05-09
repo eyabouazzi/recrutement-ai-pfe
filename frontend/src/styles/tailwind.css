@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .glass-panel {
+    @apply border border-white/10 bg-white/[0.05] backdrop-blur-2xl shadow-card;
+  }
+
+  .glass-panel-strong {
+    @apply border border-cyan-300/25 bg-white/[0.08] backdrop-blur-2xl shadow-glow;
+  }
+
+  .glow-ring {
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, 0.24),
+      0 0 28px rgba(34, 211, 238, 0.24),
+      0 14px 30px rgba(15, 23, 42, 0.36);
+  }
+
+  .section-headline {
+    @apply font-display text-3xl font-bold tracking-tight text-white sm:text-4xl;
+  }
+
+  .section-subtext {
+    @apply text-sm leading-relaxed text-slate-300 sm:text-base;
+  }
+
+  .neon-border {
+    @apply border border-cyan-300/30;
+  }
+}
+
+.web-pet-lane {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  height: 56px;
+  pointer-events: none;
+  z-index: 45;
+  overflow: hidden;
+}
+
+.web-pet {
+  position: absolute;
+  left: -70px;
+  bottom: 0;
+  display: inline-flex;
+  align-items: end;
+  gap: 4px;
+  animation: webPetWalk 22s linear infinite;
+}
+
+.web-pet__paw {
+  font-size: 12px;
+  opacity: 0.75;
+  animation: webPetPaw 0.5s steps(1) infinite;
+}
+
+.web-pet__body {
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.35));
+  animation: webPetBob 0.9s ease-in-out infinite;
+}
+
+@keyframes webPetWalk {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(100vw + 110px));
+  }
+}
+
+/* RTL variant */
+@keyframes webPetWalkRtl {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-100vw - 110px)); }
+}
+
+/* Rabbit hop */
+@keyframes webPetHop {
+  0%, 100% { transform: translateY(0) scaleX(1); }
+  30%       { transform: translateY(-16px) scaleX(0.9); }
+  60%       { transform: translateY(-8px)  scaleX(0.95); }
+}
+
+/* Bird flap */
+@keyframes webPetFly {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50%       { transform: translateY(-10px) rotate(8deg); }
+}
+
+/* Modifiers */
+.web-pet--rtl {
+  left: auto;
+  right: -70px;
+  animation-name: webPetWalkRtl;
+}
+.web-pet--rtl .web-pet__body {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+.web-pet--hop .web-pet__body {
+  animation: webPetHop 0.52s ease-in-out infinite;
+}
+.web-pet--fly .web-pet__body {
+  animation: webPetFly 0.42s ease-in-out infinite;
+}
+
+@keyframes webPetBob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes webPetPaw {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (max-width: 640px) {
+  .web-pet-lane {
+    bottom: 10px;
+    height: 48px;
+  }
+
+  .web-pet__body {
+    font-size: 23px;
+  }
+}

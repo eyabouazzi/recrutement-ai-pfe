@@ -2,6 +2,7 @@ const Interview = require('../models/interview.model');
 const User = require('../models/user.model');
 const Test = require('../models/test.model');
 const Submission = require('../models/submission.model');
+const AppNotification = require('../models/notification.model');
 const sendEmail = require('../utils/mailer');
 const { smtpConfigured } = require('../utils/emailNotifications');
 
@@ -61,6 +62,8 @@ async function createInterview(req, res) {
             durationMinutes,
             type,
             notes,
+            location,
+            messageToCandidate,
         } = req.body || {};
 
         if (!candidateId && !submissionId) {
@@ -85,11 +88,13 @@ async function createInterview(req, res) {
             durationMinutes: durationMinutes ?? 30,
             type: type || 'video',
             notes: notes || '',
+            location: location || '',
+            messageToCandidate: messageToCandidate || '',
             status: 'SCHEDULED',
             rescheduleCount: 0,
         });
 
-        // Email invite
+        // Notify candidate (in-app + email)
         try {
             const [candidate, hr, test] = await Promise.all([
                 User.findById(resolvedCandidateId).select('firstName lastName email'),
@@ -100,21 +105,49 @@ async function createInterview(req, res) {
             const testTitle = test?.title || test?.jobRole || 'Entretien';
             const when = formatFR(scheduledDate);
             const candidateName = candidate?.firstName ? ` ${candidate.firstName}` : '';
-            const hrName = hr?.firstName ? hr.firstName : 'l’équipe RH';
+            const hrName = hr?.firstName ? hr.firstName : "l'équipe RH";
+            const typeLabel = { video: 'Visio-conférence', phone: 'Téléphone', onsite: 'Sur site' }[type || 'video'] || type;
 
+            // ── In-app notification (always delivered, no SMTP needed) ──
+            await AppNotification.create({
+                userId: resolvedCandidateId,
+                type: 'interview_scheduled',
+                category: 'interview',
+                priority: 'high',
+                targetRole: 'candidat',
+                title: `📅 Entretien planifié — ${testTitle}`,
+                message:
+                    `Votre entretien est confirmé pour le ${when}.\n` +
+                    `Type : ${typeLabel}` +
+                    (location ? `\nLien / Lieu : ${location}` : '') +
+                    (messageToCandidate ? `\n\nMessage de votre recruteur :\n${messageToCandidate}` : ''),
+                link: '/mes-candidatures',
+                data: {
+                    interviewId: interview._id,
+                    scheduledAt: scheduledDate,
+                    type: type || 'video',
+                    location: location || '',
+                    messageToCandidate: messageToCandidate || '',
+                    testTitle,
+                },
+                channels: { inApp: true, realtime: true, email: false },
+            });
+
+            // ── Email (only if SMTP configured) ──
             await safeSend({
                 to: candidate?.email,
                 subject: `Entretien confirmé : ${testTitle}`,
                 content:
                     `Bonjour${candidateName},\n\n` +
                     `Votre entretien est confirmé pour : ${when}.\n` +
-                    `Type : ${type || 'video'}\n` +
-                    `Offre/Test : ${testTitle}\n\n` +
-                    `Si vous devez modifier le rendez-vous, contactez votre recruteur.\n\n` +
-                    `Cordialement,\n${hrName}`,
+                    `Type : ${typeLabel}\n` +
+                    (location ? `Lien / Lieu : ${location}\n` : '') +
+                    `Offre/Test : ${testTitle}\n` +
+                    (messageToCandidate ? `\nMessage de votre recruteur :\n${messageToCandidate}\n` : '') +
+                    `\nSi vous devez modifier le rendez-vous, contactez votre recruteur.\n\nCordialement,\n${hrName}`,
             });
         } catch {
-            // Do not fail request if email fails.
+            // Do not fail request if notification fails.
         }
 
         return res.status(201).json({ status: true, interview: await buildInterviewPayload(interview) });
@@ -123,7 +156,7 @@ async function createInterview(req, res) {
     }
 }
 
-// GET /interviews (HR/admin)
+// GET /interviews (HR)
 async function listInterviews(req, res) {
     try {
         const {
@@ -134,7 +167,7 @@ async function listInterviews(req, res) {
             status,
         } = req.query || {};
 
-        const filter = req.user.role === 'admin' ? {} : { createdBy: req.user._id };
+        const filter = { createdBy: req.user._id };
 
         if (candidateId) filter.candidateId = candidateId;
         if (testId) filter.testId = testId;
@@ -181,7 +214,7 @@ async function listMyInterviews(req, res) {
 // PATCH /interviews/:id
 async function updateInterview(req, res) {
     try {
-        if (req.user.role !== 'HR' && req.user.role !== 'admin') {
+        if (req.user.role !== 'HR') {
             return res.status(403).json({ status: false, message: 'Unauthorized' });
         }
 
@@ -195,7 +228,7 @@ async function updateInterview(req, res) {
 
         const interview = await Interview.findById(id);
         if (!interview) return res.status(404).json({ status: false, message: 'Entretien introuvable' });
-        if (req.user.role !== 'admin' && String(interview.createdBy) !== String(req.user._id)) {
+        if (String(interview.createdBy) !== String(req.user._id)) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
 
@@ -256,14 +289,14 @@ async function updateInterview(req, res) {
 // POST /interviews/:id/cancel
 async function cancelInterview(req, res) {
     try {
-        if (req.user.role !== 'HR' && req.user.role !== 'admin') {
+        if (req.user.role !== 'HR') {
             return res.status(403).json({ status: false, message: 'Unauthorized' });
         }
 
         const { id } = req.params;
         const interview = await Interview.findById(id);
         if (!interview) return res.status(404).json({ status: false, message: 'Entretien introuvable' });
-        if (req.user.role !== 'admin' && String(interview.createdBy) !== String(req.user._id)) {
+        if (String(interview.createdBy) !== String(req.user._id)) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
 
@@ -304,14 +337,14 @@ async function cancelInterview(req, res) {
 // POST /interviews/:id/remind
 async function remindInterview(req, res) {
     try {
-        if (req.user.role !== 'HR' && req.user.role !== 'admin') {
+        if (req.user.role !== 'HR') {
             return res.status(403).json({ status: false, message: 'Unauthorized' });
         }
 
         const { id } = req.params;
         const interview = await Interview.findById(id);
         if (!interview) return res.status(404).json({ status: false, message: 'Entretien introuvable' });
-        if (req.user.role !== 'admin' && String(interview.createdBy) !== String(req.user._id)) {
+        if (String(interview.createdBy) !== String(req.user._id)) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
 

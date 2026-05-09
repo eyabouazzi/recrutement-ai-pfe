@@ -1,0 +1,213 @@
+/* Advanced job match — “cosmos” visual layer */
+
+.jmc-root {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  min-height: 320px;
+  color: #f8fafc;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 60px -20px rgba(15, 23, 42, 0.65);
+}
+
+.jmc-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--jmc-gradient, linear-gradient(135deg, #4c1d95 0%, #0f172a 100%));
+}
+
+.jmc-aurora {
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(
+    from 120deg at 50% 50%,
+    rgba(167, 139, 250, 0.22),
+    rgba(56, 189, 248, 0.12),
+    rgba(244, 114, 182, 0.15),
+    rgba(167, 139, 250, 0.22)
+  );
+  animation: jmc-spin 28s linear infinite;
+  opacity: 0.55;
+}
+
+@keyframes jmc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.jmc-stars {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(1.5px 1.5px at 10% 20%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 70% 40%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1.2px 1.2px at 30% 80%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 88% 72%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1.4px 1.4px at 45% 15%, rgba(255, 255, 255, 0.4), transparent);
+  opacity: 0.5;
+  animation: jmc-twinkle 6s ease-in-out infinite alternate;
+}
+
+@keyframes jmc-twinkle {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0.65;
+  }
+}
+
+.jmc-inner {
+  position: relative;
+  z-index: 2;
+  padding: 22px 22px 18px;
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .jmc-inner {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.jmc-headline {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+
+.jmc-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+.jmc-score-ring {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.2), transparent 55%),
+    conic-gradient(from 200deg, rgba(255, 255, 255, 0.15), transparent 60%);
+  box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.04), 0 0 40px var(--jmc-glow, rgba(167, 139, 250, 0.35));
+}
+
+.jmc-score-num {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.jmc-radar-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.jmc-radar {
+  width: min(100%, 280px);
+  height: auto;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.35));
+}
+
+.jmc-orbit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.jmc-node {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  animation: jmc-float 5s ease-in-out infinite;
+}
+
+.jmc-node--match {
+  background: rgba(34, 197, 94, 0.22);
+  color: #bbf7d0;
+}
+
+.jmc-node--gap {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.jmc-node--spark {
+  background: rgba(250, 204, 21, 0.2);
+  color: #fef9c3;
+}
+
+.jmc-node:nth-child(3n) {
+  animation-delay: -1.2s;
+}
+.jmc-node:nth-child(3n + 1) {
+  animation-delay: -2.4s;
+}
+
+@keyframes jmc-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.jmc-insights {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(248, 250, 252, 0.88);
+}
+
+.jmc-insights li {
+  margin-bottom: 6px;
+}
+
+.jmc-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, rgba(76, 29, 149, 0.35), rgba(15, 23, 42, 0.75));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.jmc-compact-score {
+  font-weight: 800;
+  font-size: 1.1rem;
+  min-width: 3ch;
+}
+
+.jmc-compact-tier {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

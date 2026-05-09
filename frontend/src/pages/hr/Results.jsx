@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Typography, Tag, Space, Button, Spin, message, Modal, Input, Progress, Row, Col, Card, Statistic, Select, DatePicker, Slider } from 'antd';
+import { Table, Typography, Tag, Space, Button, Spin, message, Modal, Input, Progress, Row, Col, Card, Statistic, Select, DatePicker, Slider, Tooltip, Avatar } from 'antd';
 import { fetchAllSubmissions, fetchSubmissionDetails } from '../../api/submissions';
 import { EyeOutlined, SearchOutlined, DownloadOutlined, UsergroupAddOutlined, FilePdfOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
@@ -8,6 +8,16 @@ import autoTable from 'jspdf-autotable';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
+
+function hasPasteAlert(submission) {
+    if (!submission) return false;
+    const pasteCount = Number(submission?.behaviorData?.pasteCount || 0);
+    const anomalyFlags = Array.isArray(submission?.anomalyFlags) ? submission.anomalyFlags : [];
+    const hasPasteFlag = anomalyFlags.some((flag) =>
+        ['EXCESSIVE_PASTE', 'LOW_TYPING_ACTIVITY_LONG_ANSWERS'].includes(String(flag?.code || ''))
+    );
+    return pasteCount >= 4 || hasPasteFlag;
+}
 
 function HRResults() {
     const [submissions, setSubmissions] = useState([]);
@@ -92,6 +102,7 @@ function HRResults() {
     const avgScore = graded.length ? Math.round(graded.reduce((acc, s) => acc + (s.totalScore || 0), 0) / graded.length) : 0;
     const passedCount = graded.filter((s) => (s.qualified || (s.totalScore || 0) >= 50)).length;
     const pendingCount = filteredSubmissions.filter((s) => s.status !== 'GRADED').length;
+    const pasteAlertCount = filteredSubmissions.filter((s) => hasPasteAlert(s)).length;
 
     const exportToExcel = () => {
         const dataToExport = filteredSubmissions.map(sub => ({
@@ -109,7 +120,7 @@ function HRResults() {
         XLSX.utils.book_append_sheet(wb, ws, "Résultats");
         XLSX.writeFile(wb, "resultats_candidats.xlsx");
     };
-    
+
     const rowSelection = {
         selectedRowKeys,
         onChange: onSelectChange,
@@ -120,31 +131,31 @@ function HRResults() {
             message.warning('Veuillez sélectionner au moins 2 candidats pour comparer.');
             return;
         }
-        
+
         // Filter selected submissions from current filtered list
         const picked = filteredSubmissions.filter((s) => selectedRowKeys.includes(s._id));
-        
+
         if (picked.length < 2) {
             message.warning('Les candidats sélectionnés ne sont pas dans la liste filtrée actuelle.');
             return;
         }
-        
+
         // Check if all selected candidates took the same test
         const firstTestId = picked[0]?.testId?._id || picked[0]?.testId;
         const sameTest = picked.every((s) => {
             const currentTestId = s.testId?._id || s.testId;
             return currentTestId && currentTestId.toString() === firstTestId.toString();
         });
-        
+
         if (!sameTest) {
             message.warning('Tous les candidats sélectionnés doivent avoir passé le même test pour pouvoir les comparer.');
             return;
         }
-        
+
         try {
             setCompareLoading(true);
             message.loading({ content: 'Chargement des détails...', key: 'compare' });
-            
+
             const rows = await Promise.all(
                 selectedRowKeys.map(async (key) => {
                     try {
@@ -156,15 +167,15 @@ function HRResults() {
                     }
                 })
             );
-            
+
             // Filter out any failed fetches
             const validRows = rows.filter(r => r !== null);
-            
+
             if (validRows.length < 2) {
                 message.error({ content: 'Impossible de charger les détails de certains candidats.', key: 'compare' });
                 return;
             }
-            
+
             setCompareRows(validRows);
             setCompareOpen(true);
             message.success({ content: `${validRows.length} candidats chargés pour comparaison`, key: 'compare', duration: 2 });
@@ -270,6 +281,21 @@ function HRResults() {
             sorter: (a, b) => (a.totalScore || 0) - (b.totalScore || 0),
         },
         {
+            title: 'Alerte collage',
+            key: 'pasteAlert',
+            render: (_, record) => {
+                const alert = hasPasteAlert(record);
+                const pasteCount = Number(record?.behaviorData?.pasteCount || 0);
+                return alert ? (
+                    <Tag color="volcano">
+                        Alerte ({pasteCount} collage{pasteCount > 1 ? 's' : ''})
+                    </Tag>
+                ) : (
+                    <Tag color="default">RAS</Tag>
+                );
+            },
+        },
+        {
             title: 'Actions',
             key: 'actions',
             render: (_, record) => (
@@ -298,9 +324,9 @@ function HRResults() {
                         onChange={e => setSearchText(e.target.value)}
                         style={{ width: 250 }}
                     />
-                    <Button 
-                        type="primary" 
-                        icon={<UsergroupAddOutlined />} 
+                    <Button
+                        type="primary"
+                        icon={<UsergroupAddOutlined />}
                         disabled={selectedRowKeys.length < 2}
                         loading={compareLoading}
                         onClick={handleCompare}
@@ -373,6 +399,11 @@ function HRResults() {
                 <Col xs={24} sm={12} lg={6}>
                     <Card>
                         <Statistic title="En attente de correction" value={pendingCount} />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                    <Card>
+                        <Statistic title="Alertes collage" value={pasteAlertCount} />
                     </Card>
                 </Col>
             </Row>
@@ -453,52 +484,333 @@ function HRResults() {
             </Modal>
 
             <Modal
-                title="Comparaison des candidats"
+                title={null}
                 open={compareOpen}
                 onCancel={() => setCompareOpen(false)}
-                width={960}
-                footer={[
-                    <Button key="pdf" icon={<FilePdfOutlined />} onClick={exportComparePdf}>
-                        Exporter PDF
-                    </Button>,
-                    <Button key="x" onClick={() => setCompareOpen(false)}>Fermer</Button>,
-                ]}
+                width={1100}
+                styles={{ body: { padding: 0, background: '#f8fafc', borderRadius: 20 } }}
+                footer={null}
+                style={{ top: 20 }}
             >
-                <Table
-                    size="small"
-                    pagination={false}
-                    rowKey="_id"
-                    dataSource={compareRows}
-                    columns={[
-                        {
-                            title: 'Candidat',
-                            key: 'n',
-                            render: (_, r) =>
-                                `${r.candidateId?.firstName || ''} ${r.candidateId?.lastName || ''}`,
-                        },
-                        { title: 'Email', key: 'e', render: (_, r) => r.candidateId?.email || '—' },
-                        {
-                            title: 'Score',
-                            dataIndex: 'totalScore',
-                            sorter: (a, b) => (a.totalScore || 0) - (b.totalScore || 0),
-                        },
-                        {
-                            title: 'Seuil',
-                            dataIndex: 'qualified',
-                            render: (q) => <Tag color={q ? 'success' : 'default'}>{q ? 'OK' : '—'}</Tag>,
-                        },
-                        {
-                            title: 'Compétences (aperçu)',
-                            key: 'c',
-                            render: (_, r) =>
-                                (r.competencyBreakdown || [])
-                                    .slice(0, 3)
-                                    .map((c) => `${c.competency}: ${c.score}`)
-                                    .join(' · ') || '—',
-                        },
-                    ]}
+                <CandidateComparePanel
+                    rows={compareRows}
+                    onClose={() => setCompareOpen(false)}
+                    onExportPdf={exportComparePdf}
                 />
             </Modal>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════
+   ADVANCED CANDIDATE COMPARISON PANEL
+   ═══════════════════════════════════════════════════ */
+function ScoreRing({ score, size = 80, color }) {
+    const r = (size - 10) / 2;
+    const circ = 2 * Math.PI * r;
+    const fill = (score / 100) * circ;
+    const c = color || (score >= 75 ? '#10b981' : score >= 55 ? '#f59e0b' : '#ef4444');
+    return (
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={8} />
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={c} strokeWidth={8}
+                strokeDasharray={`${fill} ${circ - fill}`} strokeLinecap="round"
+                style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)' }}
+            />
+            <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+                style={{ fill: c, fontSize: size * 0.22, fontWeight: 800, transform: 'rotate(90deg)', transformOrigin: 'center', fontFamily: 'Inter, sans-serif' }}>
+                {score}%
+            </text>
+        </svg>
+    );
+}
+
+function CompetencyBar({ label, scores, maxScore, winner }) {
+    const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'];
+    return (
+        <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{label}</Text>
+                <Tag color="geekblue" style={{ fontSize: 10, margin: 0 }}>Max: {maxScore}</Tag>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+                {scores.map((s, i) => (
+                    <Tooltip key={i} title={`${s.name}: ${s.score}`}>
+                        <div style={{ flex: 1, height: 28, borderRadius: 6, background: '#f1f5f9', overflow: 'hidden', position: 'relative', border: winner === i ? `2px solid ${COLORS[i]}` : '2px solid transparent' }}>
+                            <div style={{
+                                position: 'absolute', left: 0, top: 0, bottom: 0,
+                                width: `${Math.min(100, (s.score / Math.max(maxScore, 1)) * 100)}%`,
+                                background: COLORS[i], opacity: 0.85,
+                                borderRadius: 4, transition: 'width 0.7s ease',
+                            }} />
+                            <span style={{ position: 'relative', zIndex: 1, fontSize: 11, fontWeight: 700, color: '#fff', padding: '0 8px', lineHeight: '28px', mixBlendMode: 'difference' }}>
+                                {s.score}
+                            </span>
+                        </div>
+                    </Tooltip>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function CandidateComparePanel({ rows, onClose, onExportPdf }) {
+    if (!rows || rows.length === 0) return null;
+    const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'];
+    const MEDALS = ['🥇', '🥈', '🥉'];
+
+    // Sort by total score descending to get ranking
+    const ranked = [...rows].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+    const rankMap = {};
+    ranked.forEach((r, i) => { rankMap[r._id] = i; });
+
+    // Gather all unique competency names
+    const allCompetencies = [...new Set(
+        rows.flatMap(r => (r.competencyBreakdown || []).map(c => c.competency))
+    )];
+
+    // Gather all dimension keys from matchEngine
+    const allDimensions = [...new Set(
+        rows.flatMap(r => Object.keys(r.jobMatchAnalysis?.matchEngine?.dimensions || {}))
+    )].slice(0, 8);
+
+    const getName = (r) => `${r.candidateId?.firstName || ''} ${r.candidateId?.lastName || ''}`.trim() || 'Candidat';
+    const getInitials = (r) => {
+        const n = getName(r);
+        return n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    };
+
+    return (
+        <div style={{ background: '#f8fafc', borderRadius: 20, overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{
+                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                padding: '24px 32px', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+                <div>
+                    <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em' }}>⚡ Comparaison IA avancée</div>
+                    <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
+                        {rows.length} candidats · {rows[0]?.testId?.jobRole || rows[0]?.testId?.title || 'Poste'}
+                    </div>
+                </div>
+                <Space>
+                    <Button icon={<FilePdfOutlined />} onClick={onExportPdf} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}>PDF</Button>
+                    <Button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}>✕ Fermer</Button>
+                </Space>
+            </div>
+
+            <div style={{ padding: '28px 32px', display: 'grid', gap: 24, maxHeight: '78vh', overflowY: 'auto' }}>
+
+                {/* Podium / Score Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${rows.length}, 1fr)`, gap: 14 }}>
+                    {ranked.map((r, idx) => {
+                        const score = r.totalScore || 0;
+                        const matchScore = r.jobMatchAnalysis?.score || 0;
+                        const trust = r.trustScore ?? 100;
+                        const color = COLORS[idx % COLORS.length];
+                        return (
+                            <div key={r._id} style={{
+                                background: '#fff', borderRadius: 18, padding: '22px 18px',
+                                border: `2px solid ${idx === 0 ? '#f59e0b' : '#e2e8f0'}`,
+                                boxShadow: idx === 0 ? '0 8px 28px rgba(245,158,11,0.14)' : '0 2px 12px rgba(15,23,42,0.06)',
+                                textAlign: 'center', position: 'relative',
+                            }}>
+                                {idx < 3 && (
+                                    <div style={{ position: 'absolute', top: 12, right: 14, fontSize: 20 }}>{MEDALS[idx]}</div>
+                                )}
+                                <Avatar size={52} style={{ background: color, fontWeight: 800, fontSize: 18, marginBottom: 10 }}>
+                                    {getInitials(r)}
+                                </Avatar>
+                                <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a', marginBottom: 2 }}>{getName(r)}</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>{r.candidateId?.email}</div>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+                                    <ScoreRing score={score} size={88} color={color} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '8px 6px' }}>
+                                        <div style={{ fontSize: 16, fontWeight: 800, color: matchScore >= 70 ? '#10b981' : matchScore >= 50 ? '#f59e0b' : '#ef4444' }}>{matchScore}%</div>
+                                        <div style={{ fontSize: 10, color: '#94a3b8' }}>Match CV</div>
+                                    </div>
+                                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '8px 6px' }}>
+                                        <div style={{ fontSize: 16, fontWeight: 800, color: trust >= 80 ? '#10b981' : trust >= 60 ? '#f59e0b' : '#ef4444' }}>{trust}</div>
+                                        <div style={{ fontSize: 10, color: '#94a3b8' }}>Confiance</div>
+                                    </div>
+                                </div>
+                                {r.qualified && (
+                                    <Tag color="success" style={{ marginTop: 10, borderRadius: 20, fontWeight: 700 }}>✓ Qualifié</Tag>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Competency Heatmap */}
+                {allCompetencies.length > 0 && (
+                    <div style={{ background: '#fff', borderRadius: 18, padding: '22px 24px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                            <div style={{ fontSize: 16 }}>🧠</div>
+                            <Title level={5} style={{ margin: 0 }}>Compétences comparées</Title>
+                            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                                {ranked.map((r, i) => (
+                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <div style={{ width: 10, height: 10, borderRadius: 3, background: COLORS[i] }} />
+                                        <Text style={{ fontSize: 11 }}>{getName(r).split(' ')[0]}</Text>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {allCompetencies.map((comp) => {
+                            const scores = ranked.map(r => ({
+                                name: getName(r),
+                                score: (r.competencyBreakdown || []).find(c => c.competency === comp)?.score ?? 0,
+                            }));
+                            const maxScore = Math.max(...scores.map(s => s.score));
+                            const winner = scores.findIndex(s => s.score === maxScore);
+                            return <CompetencyBar key={comp} label={comp} scores={scores} maxScore={maxScore} winner={winner} />;
+                        })}
+                    </div>
+                )}
+
+                {/* AI Match Dimensions */}
+                {allDimensions.length > 0 && (
+                    <div style={{ background: '#fff', borderRadius: 18, padding: '22px 24px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                            <div style={{ fontSize: 16 }}>🎯</div>
+                            <Title level={5} style={{ margin: 0 }}>Dimensions de matching IA</Title>
+                        </div>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                            {allDimensions.map((dim) => {
+                                const scores = ranked.map(r => ({
+                                    name: getName(r),
+                                    score: Math.round((r.jobMatchAnalysis?.matchEngine?.dimensions?.[dim] || 0) * 100),
+                                }));
+                                const maxScore = Math.max(...scores.map(s => s.score));
+                                const winner = scores.findIndex(s => s.score === maxScore);
+                                const label = dim.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                return <CompetencyBar key={dim} label={label} scores={scores} maxScore={maxScore} winner={winner} />;
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Enriched CV Signals grid */}
+                <div style={{ background: '#fff', borderRadius: 18, padding: '22px 24px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                        <div style={{ fontSize: 16 }}>🔍</div>
+                        <Title level={5} style={{ margin: 0 }}>Signaux CV enrichis</Title>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ranked.length}, 1fr)`, gap: 12 }}>
+                        {ranked.map((r, idx) => {
+                            const sig = r.jobMatchAnalysis?.enrichedCvSignals || {};
+                            const color = COLORS[idx % COLORS.length];
+                            return (
+                                <div key={r._id} style={{ background: '#f8fafc', borderRadius: 14, padding: '16px 14px', borderTop: `3px solid ${color}` }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: '#0f172a' }}>{getName(r).split(' ')[0]}</div>
+                                    <div style={{ display: 'grid', gap: 6 }}>
+                                        {sig.educationLevel && <div style={{ fontSize: 12 }}>🎓 <Tag color="blue" style={{ fontSize: 10 }}>{sig.educationLevel}</Tag></div>}
+                                        {sig.certifications?.length > 0 && (
+                                            <div style={{ fontSize: 12 }}>🏅 {sig.certifications.slice(0, 3).map(c => <Tag key={c} color="gold" style={{ fontSize: 10, marginBottom: 2 }}>{c}</Tag>)}</div>
+                                        )}
+                                        {sig.languages?.length > 0 && (
+                                            <div style={{ fontSize: 12 }}>🌐 {sig.languages.map(l => <Tag key={l} color="cyan" style={{ fontSize: 10, marginBottom: 2 }}>{l}</Tag>)}</div>
+                                        )}
+                                        {sig.industryDomains?.length > 0 && (
+                                            <div style={{ fontSize: 12 }}>🏢 {sig.industryDomains.slice(0, 2).map(d => <Tag key={d} color="purple" style={{ fontSize: 10, marginBottom: 2 }}>{d}</Tag>)}</div>
+                                        )}
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                            {sig.hasOpenSourceContributions && <Tag color="green" style={{ fontSize: 10 }}>Open Source ✓</Tag>}
+                                            {sig.hasLiveProjects && <Tag color="geekblue" style={{ fontSize: 10 }}>Projets live ✓</Tag>}
+                                            {sig.quantifiedAchievements > 0 && <Tag color="orange" style={{ fontSize: 10 }}>{sig.quantifiedAchievements} réalisations</Tag>}
+                                            {sig.leadershipSignals > 0 && <Tag color="red" style={{ fontSize: 10 }}>Leadership ×{sig.leadershipSignals}</Tag>}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Integrity & Trust */}
+                <div style={{ background: '#fff', borderRadius: 18, padding: '22px 24px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                        <div style={{ fontSize: 16 }}>🛡️</div>
+                        <Title level={5} style={{ margin: 0 }}>Intégrité & Comportement</Title>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ranked.length}, 1fr)`, gap: 12 }}>
+                        {ranked.map((r, idx) => {
+                            const trust = r.trustScore ?? 100;
+                            const flags = (r.anomalyFlags || []).length;
+                            const paste = r.behaviorData?.pasteCount || 0;
+                            const tabSwitch = r.behaviorData?.tabSwitches || 0;
+                            const color = COLORS[idx % COLORS.length];
+                            return (
+                                <div key={r._id} style={{ background: '#f8fafc', borderRadius: 14, padding: '16px 14px', borderTop: `3px solid ${color}` }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: '#0f172a' }}>{getName(r).split(' ')[0]}</div>
+                                    <div style={{ display: 'grid', gap: 8 }}>
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                <Text style={{ fontSize: 11, color: '#64748b' }}>Score de confiance</Text>
+                                                <Text style={{ fontSize: 11, fontWeight: 700, color: trust >= 80 ? '#10b981' : trust >= 60 ? '#f59e0b' : '#ef4444' }}>{trust}/100</Text>
+                                            </div>
+                                            <Progress percent={trust} showInfo={false} strokeColor={trust >= 80 ? '#10b981' : trust >= 60 ? '#f59e0b' : '#ef4444'} size="small" />
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                            <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: 16, fontWeight: 800, color: flags > 0 ? '#ef4444' : '#10b981' }}>{flags}</div>
+                                                <div style={{ fontSize: 10, color: '#94a3b8' }}>Anomalies</div>
+                                            </div>
+                                            <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: 16, fontWeight: 800, color: paste >= 4 ? '#ef4444' : '#10b981' }}>{paste}</div>
+                                                <div style={{ fontSize: 10, color: '#94a3b8' }}>Collages</div>
+                                            </div>
+                                            <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: 16, fontWeight: 800, color: tabSwitch > 5 ? '#f59e0b' : '#10b981' }}>{tabSwitch}</div>
+                                                <div style={{ fontSize: 10, color: '#94a3b8' }}>Changem. onglet</div>
+                                            </div>
+                                            <div style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', textAlign: 'center' }}>
+                                                <Tag color={r.qualified ? 'success' : 'default'} style={{ margin: 0, fontSize: 11, fontWeight: 700 }}>
+                                                    {r.qualified ? '✓ Qualifié' : 'Non qualifié'}
+                                                </Tag>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* AI Verdict */}
+                <div style={{ background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)', borderRadius: 18, padding: '22px 24px', border: '1px solid #c4b5fd' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <div style={{ fontSize: 16 }}>🤖</div>
+                        <Title level={5} style={{ margin: 0, color: '#6366f1' }}>Verdict IA — Candidat recommandé</Title>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(ranked.length, 3)}, 1fr)`, gap: 12 }}>
+                        {ranked.slice(0, 3).map((r, idx) => {
+                            const score = r.totalScore || 0;
+                            const matchScore = r.jobMatchAnalysis?.score || 0;
+                            const composite = Math.round(score * 0.5 + matchScore * 0.3 + (r.trustScore || 100) * 0.2);
+                            return (
+                                <div key={r._id} style={{ background: '#fff', borderRadius: 14, padding: '16px', borderLeft: `4px solid ${COLORS[idx]}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                        <span style={{ fontSize: 20 }}>{MEDALS[idx] || '🏅'}</span>
+                                        <span style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>{getName(r)}</span>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                                        Score composite: <strong style={{ color: COLORS[idx] }}>{composite}/100</strong>
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                                        {r.jobMatchAnalysis?.summary ? r.jobMatchAnalysis.summary.slice(0, 100) + '…' : 'Analyse disponible sur la fiche candidat.'}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+            </div>
         </div>
     );
 }

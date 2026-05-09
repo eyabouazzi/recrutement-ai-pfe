@@ -13,9 +13,9 @@ router.get('/:id', getEventById);
 // Authenticated users can register to events
 router.post('/:id/register', protect, registerToEvent);
 
-// HR / admin can create, update, delete events
-router.post('/', protect, restrictTo('HR', 'admin'), upload.single('image'), createEvent);
-router.put('/:id', protect, restrictTo('HR', 'admin'), upload.single('image'), updateEvent);
-router.delete('/:id', protect, restrictTo('HR', 'admin'), deleteEvent);
+// HR can create, update, delete events
+router.post('/', protect, restrictTo('HR'), upload.single('image'), createEvent);
+router.put('/:id', protect, restrictTo('HR'), upload.single('image'), updateEvent);
+router.delete('/:id', protect, restrictTo('HR'), deleteEvent);
 
 module.exports = router;

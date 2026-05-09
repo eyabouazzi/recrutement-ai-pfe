@@ -69,6 +69,7 @@ function SkillMatch({ score, userSkills, jobSkills }) {
 // Job recommendation card
 function JobCard({ job, userSkills, index }) {
     const navigate = useNavigate();
+    const matchScore = Number(job.matchScore ?? job.score ?? 0);
 
     return (
         <motion.div
@@ -94,7 +95,7 @@ function JobCard({ job, userSkills, index }) {
                         <Text type="secondary" style={styles.companyName}>{job.companyName}</Text>
                     </div>
                     <SkillMatch
-                        score={job.matchScore || Math.floor(70 + Math.random() * 25)}
+                        score={matchScore}
                         userSkills={userSkills}
                         jobSkills={job.requiredSkills}
                     />
@@ -191,7 +192,15 @@ export default function PersonalizedDashboard() {
             // Fetch recommendations
             const recsResponse = await getRecommendations();
             if (recsResponse.status) {
-                setRecommendations(recsResponse.recommendations?.slice(0, 6) || []);
+                const nextRecommendations = recsResponse.recommendations?.slice(0, 6) || [];
+                setRecommendations(nextRecommendations);
+
+                const metaStats = recsResponse.meta?.stats || {};
+                setStats((prev) => ({
+                    ...prev,
+                    matches: metaStats.totalRecommendations || nextRecommendations.length,
+                    skillScore: metaStats.averageMatchScore || 0,
+                }));
             }
 
             // Fetch upcoming events
@@ -199,14 +208,6 @@ export default function PersonalizedDashboard() {
             if (eventsResponse.status) {
                 setUpcomingEvents(eventsResponse.events || []);
             }
-
-            // Calculate stats (mock data for now, would come from API)
-            setStats({
-                matches: Math.floor(Math.random() * 20) + 5,
-                applications: Math.floor(Math.random() * 10) + 2,
-                favorites: Math.floor(Math.random() * 15) + 3,
-                skillScore: Math.floor(Math.random() * 30) + 70
-            });
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error);

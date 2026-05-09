@@ -34,6 +34,8 @@ const recommendationSchema = new mongoose.Schema({
         },
         reason: String,
         fitSummary: String,
+        hardRequirementSkills: [String],
+        missingHardRequirements: [String],
         matchedSkills: [String],
         missingSkills: [String],
         skillGaps: [{
@@ -48,6 +50,7 @@ const recommendationSchema = new mongoose.Schema({
             suggestion: String
         }],
         scoreBreakdown: {
+            hardRequirements: Number,
             skillCoverage: Number,
             skillAlignment: Number,
             proficiency: Number,

@@ -88,6 +88,15 @@ export async function updateProfile(payload) {
     }
 }
 
+export async function previewProfileAnalysis(payload) {
+    try {
+        const response = await axiosClient.post('/auth/me/profile-analysis-preview', payload);
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || 'Failed to preview profile analysis');
+    }
+}
+
 export async function changePassword(payload) {
     try {
         const response = await axiosClient.put('/auth/change-password', payload);

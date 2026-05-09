@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['user', 'admin', 'HR', 'candidat'],
+        enum: ['HR', 'candidat'],
         default: 'candidat'
     },
     avatar: {
@@ -42,6 +42,9 @@ const userSchema = new mongoose.Schema({
     emailVerified: { type: Boolean, default: false },
     emailVerifToken: { type: String, select: false },
     emailVerifExpires: { type: Date, select: false },
+    // Password reset (DB-backed one-time token)
+    resetPasswordToken: { type: String, select: false },
+    resetPasswordExpires: { type: Date, select: false },
     // Onboarding
     onboardingDone: { type: Boolean, default: false },
     // Profile info (collected during onboarding)
@@ -52,6 +55,7 @@ const userSchema = new mongoose.Schema({
     country: { type: String, trim: true, default: 'Algérie' },
     experienceYears: { type: Number, min: 0, default: 0 },
     phone: { type: String, trim: true },
+    jobTitle: { type: String, trim: true },
     // Job preferences
     preferredJobType: { type: String },  // CDI, CDD, Stage...
     preferredSector: { type: String },
@@ -80,6 +84,10 @@ const userSchema = new mongoose.Schema({
         emailApplicationStatus: { type: Boolean, default: true },
         emailInterviewUpdates: { type: Boolean, default: true },
         emailRecommendedJobs: { type: Boolean, default: true },
+        emailPipelineMatchingPositive: { type: Boolean, default: true },
+        emailPipelineMatchingNegative: { type: Boolean, default: true },
+        emailPipelineAssessmentPass: { type: Boolean, default: true },
+        emailPipelineAssessmentFail: { type: Boolean, default: true },
     },
     accessibilityMode: {
         type: Boolean,

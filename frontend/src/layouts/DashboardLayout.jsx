@@ -1,76 +1,38 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useContext, useState } from 'react';
 import { AuthContext } from '../contexts/authContext';
-import { useDarkMode } from '../contexts/DarkModeContext';
 import UserAvatar from '../Components/UserAvatar.jsx';
 import ChatWidget from '../Components/ChatWidget.jsx';
+import NotificationBell from '../Components/NotificationBell.jsx';
 import { clearStoredToken } from '../utils/authStorage';
-import { useWebSocket } from '../contexts/WebSocketContext.jsx';
+import '../styles/app-dark.css';
 
-/* ── Icon components defined FIRST so NAV array can reference them ── */
-function IcoDashboard() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>;
-}
-function IcoTests() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>;
-}
-function IcoCandidates() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
-}
-function IcoResults() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>;
-}
-function IcoSettings() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
-}
-function IcoExport() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7,10 12,15 17,10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
-}
-
-function IcoPipeline() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>;
-}
-
-function IcoProfile() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
-}
-
-function IcoCalendar() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>;
-}
-
-function IcoNotifications() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
-}
-
-function IcoAudit() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>;
-}
+/* ── Icons ─────────────────────────────────────── */
+const IcoDashboard = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+const IcoPipeline  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>;
+const IcoTests     = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+const IcoResults   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+const IcoProfile   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+const IcoQuestions = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const IcoChevronL  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15,18 9,12 15,6"/></svg>;
+const IcoChevronR  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9,18 15,12 9,6"/></svg>;
+const IcoLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const NAV = [
-  { path: '/rh/dashboard', label: 'Tableau de bord', icon: IcoDashboard },
-  { path: '/rh/pipeline', label: 'Pipeline de Recrutement', icon: IcoPipeline },
-  { path: '/rh/tests', label: "Offres d'emploi", icon: IcoTests },
-  { path: '/rh/question-bank', label: 'Banque de questions', icon: IcoTests },
-  { path: '/rh/calendar', label: 'Calendrier', icon: IcoCalendar },
-  { path: '/rh/notifications', label: 'Notifications', icon: IcoNotifications },
-  { path: '/rh/resultats', label: 'Résultats', icon: IcoResults },
-  { path: '/rh/audit-activite', label: 'Journal soumissions', icon: IcoAudit },
-  { path: '/rh/profile', label: 'Profil', icon: IcoProfile },
-  { path: '/rh/parametres', label: 'Paramètres', icon: IcoSettings },
-  { path: '/rh/exports', label: 'Exports', icon: IcoExport },
+  { path: '/rh/dashboard',     label: 'Tableau de bord',       icon: IcoDashboard },
+  { path: '/rh/pipeline',      label: 'Pipeline',              icon: IcoPipeline  },
+  { path: '/rh/tests',         label: "Offres d'emploi",       icon: IcoTests     },
+  { path: '/rh/question-bank', label: 'Banque de questions',   icon: IcoQuestions },
+  { path: '/rh/resultats',     label: 'Résultats',             icon: IcoResults   },
+  { path: '/rh/profile',       label: 'Profil',                icon: IcoProfile   },
 ];
 
-
-function DashboardLayout() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
+export default function DashboardLayout() {
+  const [collapsed, setCollapsed]   = useState(false);
+  const [menuOpen,  setMenuOpen]    = useState(false);
+  const location  = useLocation();
+  const navigate  = useNavigate();
   const { user, setToken, setUser } = useContext(AuthContext);
-  const { darkMode, toggleDarkMode } = useDarkMode();
-  const { unreadCount } = useWebSocket();
-  const notificationCount = unreadCount;
 
   const handleLogout = () => {
     setToken(null); setUser(null);
@@ -81,160 +43,98 @@ function DashboardLayout() {
   const currentPage = NAV.find(n => location.pathname.startsWith(n.path));
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0c1626 0%, #103450 60%, #0f766e 120%)',
-      position: 'relative',
-    }} className="wow-hr-shell">
+    <div className="dark-shell rh-shell">
       {/* ── SIDEBAR ── */}
-      <aside className="modern-sidebar" style={{
-        width: collapsed ? 70 : 236,
-        flexShrink: 0,
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        zIndex: 30,
-      }}>
+      <aside className="ds-sidebar" style={{ width: collapsed ? 64 : 230 }}>
         {/* Brand */}
-        <div style={s.brand}>
-          <div style={s.brandIcon}>
+        <div className="ds-brand">
+          <div className="ds-brand-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#5B3FA8" />
-              <path d="M2 12l10 5 10-5" stroke="#5B3FA8" strokeWidth="2" strokeLinecap="round" />
+              <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#fff"/>
+              <path d="M2 12l10 5 10-5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
           {!collapsed && (
-            <span style={s.brandText}>Recruit <span style={s.brandAI}>AI</span></span>
+            <span className="ds-brand-text">
+              Recruit <span className="ds-brand-ai">AI</span>
+            </span>
           )}
         </div>
 
-        <div style={s.divider} />
+        <div className="ds-divider" />
 
-        {/* Navigation */}
-        <nav style={s.nav}>
+        {/* Nav */}
+        <nav className="ds-nav">
           {NAV.map(item => {
             const active = location.pathname.startsWith(item.path);
-            const Icon = item.icon;
+            const Icon   = item.icon;
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 title={collapsed ? item.label : undefined}
-                className={`modern-nav-item ${active ? 'active' : ''}`}
+                className={`ds-nav-item ${active ? 'active' : ''}`}
+                style={{ justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '10px' : '10px 14px' }}
               >
-                <span style={{ color: active ? 'var(--purple)' : 'var(--text-muted)', flexShrink: 0 }}>
-                  <Icon />
-                </span>
-                {!collapsed && <span style={s.navLabel}>{item.label}</span>}
+                <Icon />
+                {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        {/* User block at bottom */}
-        <div style={s.sideBottom}>
-          <div style={s.divider} />
-          <div style={{
-            ...s.userBlock,
-            padding: collapsed ? '12px 0' : '12px 14px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-          }}>
-            <UserAvatar user={user} size={38} />
+        {/* User block */}
+        <div className="ds-side-bottom">
+          <div className="ds-divider" />
+          <div className="ds-user-block" style={{ justifyContent: collapsed ? 'center' : 'flex-start' }}>
+            <UserAvatar user={user} size={34} />
             {!collapsed && (
               <div>
-                <div style={s.userName}>{user?.firstName} {user?.lastName}</div>
-                <div style={s.userRole}>HR Manager</div>
+                <div className="ds-user-name">{user?.firstName} {user?.lastName}</div>
+                <div className="ds-user-role">{user?.role === 'admin' ? 'Platform Admin' : 'HR Manager'}</div>
               </div>
             )}
           </div>
         </div>
 
         {/* Collapse toggle */}
-        <button style={s.collapseBtn} onClick={() => setCollapsed(c => !c)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            {collapsed
-              ? <polyline points="9,18 15,12 9,6" />
-              : <polyline points="15,18 9,12 15,6" />}
-          </svg>
+        <button className="ds-collapse-btn" onClick={() => setCollapsed(c => !c)}>
+          {collapsed ? <IcoChevronR /> : <IcoChevronL />}
         </button>
       </aside>
 
       {/* ── MAIN ── */}
-      <div className="dashboard-content wow-dashboard-content" style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        overflowY: 'auto',
-        height: '100vh',
-      }}>
+      <div className="ds-main rh-main">
         {/* Topbar */}
-        <header className="dashboard-header">
+        <header className="ds-topbar rh-topbar">
           <div>
-            <h1 className="dashboard-title">{currentPage?.label ?? 'Tableau de bord'}</h1>
-            <p className="dashboard-subtitle">
-              Recruit AI &rsaquo; {currentPage?.label ?? 'Dashboard'}
-            </p>
+            <div className="ds-topbar-title">{currentPage?.label ?? 'Tableau de bord'}</div>
+            <div className="ds-topbar-sub">Recruit AI › {currentPage?.label ?? 'Dashboard'}</div>
           </div>
 
-          <div style={s.topRight}>
-            {/* Dark Mode Toggle */}
-            <div style={s.darkModeToggle}>
-              <button 
-                style={{...s.iconBtn, background: darkMode ? '#8b5cf6' : '#e2e8f0'}}
-                onClick={toggleDarkMode}
-                title={darkMode ? 'Mode clair' : 'Mode sombre'}
-              >
-                {darkMode ? '☀️' : '🌙'}
-              </button>
-            </div>
+          <div className="ds-topbar-right">
+            <NotificationBell />
 
-            {/* Notification */}
-            <button
-              className="notification-badge"
-              data-count={notificationCount}
-              title="Notifications"
-              onClick={() => navigate('/rh/notifications')}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-            </button>
-
-            {/* Avatar menu */}
             <div style={{ position: 'relative' }}>
-              <button style={s.avatarBtn} onClick={() => setUserMenuOpen(v => !v)}>
-                <UserAvatar user={user} size={32} />
-                <span style={s.avatarName}>{user?.firstName || 'RH'}</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="6,9 12,15 18,9" />
+              <button className="ds-avatar-btn" onClick={() => setMenuOpen(v => !v)}>
+                <UserAvatar user={user} size={28} />
+                <span>{user?.firstName || 'RH'}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="6,9 12,15 18,9"/>
                 </svg>
               </button>
 
-              {userMenuOpen && (
-                <div className="dashboard-modal" style={{ position: 'absolute', top: 64, right: 0, width: 280, padding: 0 }}>
-                  <div style={s.dropHeader}>
-                    <UserAvatar user={user} size={52} />
+              {menuOpen && (
+                <div className="ds-dropdown">
+                  <div className="ds-drop-header">
+                    <UserAvatar user={user} size={44} />
                     <div>
-                      <div style={s.dropName}>{user?.firstName} {user?.lastName}</div>
-                      <div style={s.dropEmail}>{user?.email}</div>
+                      <div className="ds-drop-name">{user?.firstName} {user?.lastName}</div>
+                      <div className="ds-drop-email">{user?.email}</div>
                     </div>
                   </div>
-                  <div style={s.dropDivider} />
-                  <button style={s.dropItem} onClick={() => { setUserMenuOpen(false); navigate('/rh/parametres'); }}>
-                    <IcoSettings /> Paramètres
-                  </button>
-                  <div style={s.dropDivider} />
-                  <button style={{ ...s.dropItem, color: '#DC2626' }} onClick={handleLogout}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16,17 21,12 16,7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                    Déconnexion
+                  <button className="ds-drop-item danger" onClick={handleLogout}>
+                    <IcoLogout /> Déconnexion
                   </button>
                 </div>
               )}
@@ -243,189 +143,12 @@ function DashboardLayout() {
         </header>
 
         {/* Page content */}
-        <main className="wow-dashboard-main" style={{ flex: 1, padding: '32px 40px', overflowY: 'auto' }}>
+        <main className="ds-content rh-content">
           <Outlet />
         </main>
       </div>
+
       <ChatWidget />
     </div>
   );
 }
-
-const s = {
-  root: {
-    display: 'flex',
-    minHeight: '100vh',
-    background: 'var(--bg-light)',
-    fontFamily: "'Inter', sans-serif",
-  },
-
-  sidebar: {
-    background: 'var(--navy)',
-    borderRight: '1px solid rgba(255, 255, 255, 0.05)',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'sticky',
-    top: 0, height: '100vh',
-    flexShrink: 0,
-    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    overflow: 'hidden',
-    zIndex: 20,
-    boxShadow: 'var(--shadow-xl)',
-  },
-
-  brand: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    padding: '28px 20px',
-    minHeight: 84,
-  },
-  brandIcon: {
-    width: 40, height: 40,
-    borderRadius: 12,
-    background: 'var(--blue)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-    boxShadow: 'var(--shadow-blue)',
-  },
-  brandText: {
-    fontSize: 20, fontWeight: 800,
-    color: '#fff',
-    letterSpacing: '-0.04em',
-    whiteSpace: 'nowrap',
-  },
-  brandAI: { color: 'var(--blue-light)', opacity: 0.9 },
-
-  divider: { height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 20px' },
-
-  nav: {
-    flex: 1, padding: '24px 14px',
-    display: 'flex', flexDirection: 'column', gap: 8,
-    overflowY: 'auto',
-  },
-  navItem: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    borderRadius: 12, textDecoration: 'none',
-    color: 'rgba(255, 255, 255, 0.6)', fontSize: 14, fontWeight: 500,
-    transition: 'all 0.2s ease', minHeight: 46,
-    padding: '0 16px',
-  },
-  navItemActive: {
-    background: 'var(--blue)',
-    color: '#fff',
-    fontWeight: 600,
-    boxShadow: 'var(--shadow-blue)',
-  },
-  navLabel: { flex: 1, whiteSpace: 'nowrap', color: 'inherit' },
-
-  sideBottom: { flexShrink: 0, padding: '0 14px 14px' },
-  userBlock: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    borderRadius: 16,
-    background: 'rgba(255, 255, 255, 0.05)',
-    padding: '12px',
-    marginTop: 12,
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-  },
-  userAvatar: {
-    width: 38, height: 38, borderRadius: 10,
-    background: 'var(--blue-light)',
-    color: 'var(--navy)', fontSize: 14, fontWeight: 700,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-  userName: { fontSize: 14, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' },
-  userRole: { fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' },
-
-  collapseBtn: {
-    width: '100%', padding: '14px 0',
-    background: 'transparent',
-    border: 'none', borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-    cursor: 'pointer', color: 'rgba(255,255,255,0.4)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    transition: 'background 0.2s',
-    flexShrink: 0,
-  },
-
-  main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 },
-
-  topbar: {
-    height: 80, padding: '0 40px',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    background: 'var(--bg-white)',
-    borderBottom: '1px solid var(--border)',
-    position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
-  },
-  pageTitle: { fontSize: 24, fontWeight: 800, color: 'var(--text-heading)', margin: 0, letterSpacing: '-0.04em' },
-  breadcrumb: { fontSize: 13, color: 'var(--text-muted)', margin: 0, marginTop: 4, fontWeight: 500 },
-
-  topRight: { display: 'flex', alignItems: 'center', gap: 20 },
-  iconBtn: {
-    position: 'relative',
-    width: 44, height: 44, borderRadius: 12,
-    background: 'var(--bg-subtle)', border: '1px solid var(--border)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: 'var(--text-muted)', transition: 'all 0.2s',
-  },
-  darkModeToggle: {
-    display: 'flex',
-    alignItems: 'center',
-    marginRight: 8
-  },
-  badge: {
-    position: 'absolute', top: 12, right: 12,
-    width: 8, height: 8, borderRadius: '50%',
-    background: '#ef4444', border: '2px solid var(--bg-white)',
-  },
-  avatarBtn: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    padding: '8px 18px',
-    background: 'var(--bg-subtle)', border: '1px solid var(--border)',
-    borderRadius: 14, cursor: 'pointer',
-    color: 'var(--text-heading)', transition: 'all 0.2s',
-  },
-  topAvatar: {
-    width: 32, height: 32, borderRadius: 10,
-    background: 'var(--blue)',
-    color: '#fff', fontSize: 13, fontWeight: 700,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  avatarName: { fontSize: 14, fontWeight: 600 },
-
-  dropdown: {
-    position: 'absolute', top: 64, right: 0, width: 280,
-    background: 'var(--bg-white)', border: '1px solid var(--border)',
-    borderRadius: 20, overflow: 'hidden',
-    boxShadow: 'var(--shadow-xl)', zIndex: 100,
-    animation: 'scaleIn 0.2s ease both',
-  },
-  dropHeader: {
-    padding: '24px',
-    display: 'flex', alignItems: 'center', gap: 16,
-    background: 'var(--bg-subtle)',
-    borderBottom: '1px solid var(--border)',
-  },
-  dropLargeAvatar: {
-    width: 52, height: 52, borderRadius: 14,
-    background: 'var(--blue)',
-    color: '#fff', fontSize: 20, fontWeight: 700,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-    boxShadow: 'var(--shadow-blue)',
-  },
-  dropName: { fontSize: 16, fontWeight: 700, color: 'var(--text-heading)' },
-  dropEmail: { fontSize: 13, color: 'var(--text-muted)', marginTop: 2, fontWeight: 500 },
-  dropDivider: { height: 1, background: 'var(--border)' },
-  dropItem: {
-    width: '100%', padding: '14px 24px',
-    background: 'transparent', border: 'none',
-    cursor: 'pointer', fontSize: 14, fontWeight: 600,
-    color: 'var(--text-body)', textAlign: 'left',
-    display: 'flex', alignItems: 'center', gap: 14,
-    fontFamily: "'Inter', sans-serif",
-    transition: 'all 0.2s',
-  },
-
-  content: { flex: 1, padding: '40px', overflow: 'auto' },
-};
-
-export default DashboardLayout;

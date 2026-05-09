@@ -1,4 +1,5 @@
 const AppNotification = require('../models/notification.model');
+const User = require('../models/user.model');
 const { sendMessage } = require('./websocket');
 
 function toRealtimePayload(notification) {
@@ -15,6 +16,7 @@ function toRealtimePayload(notification) {
         type: doc.type || 'general',
         category: doc.category || 'system',
         priority: doc.priority || 'normal',
+        targetRole: doc.targetRole || 'all',
         title: doc.title,
         message: doc.message,
         read: Boolean(doc.read),
@@ -41,13 +43,24 @@ async function emitUnreadCount(userId) {
     return unreadCount;
 }
 
-function normalizeInput(payload = {}) {
+async function resolveNotificationTargetRole(payload = {}) {
+    if (payload.targetRole) return String(payload.targetRole);
+    if (!payload.userId) return 'all';
+    const recipient = await User.findById(payload.userId).select('role').lean();
+    const role = String(recipient?.role || '').trim();
+    if (role === 'HR' || role === 'candidat') return role;
+    return 'all';
+}
+
+async function normalizeInput(payload = {}) {
     const expiresAt = payload.expiresAt ? new Date(payload.expiresAt) : null;
+    const targetRole = await resolveNotificationTargetRole(payload);
     return {
         userId: payload.userId,
         type: payload.type || 'general',
         category: payload.category || 'system',
         priority: payload.priority || 'normal',
+        targetRole,
         title: String(payload.title || '').trim(),
         message: String(payload.message || '').trim(),
         link: payload.link || '',
@@ -73,7 +86,7 @@ async function createAndDispatchNotification(
         skipIfDuplicate = true,
     } = options;
 
-    const input = normalizeInput(payload);
+    const input = await normalizeInput(payload);
     if (!input.userId || !input.title || !input.message) {
         throw new Error('Notification requires userId, title, and message');
     }

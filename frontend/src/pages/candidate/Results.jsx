@@ -3,9 +3,53 @@ import { Table, Typography, Tag, Space, Button, Spin, message, Modal, Card, Row,
 import { fetchMySubmissions, fetchSubmissionDetails } from '../../api/submissions';
 import { EyeOutlined, TrophyOutlined, FireOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UserOutlined, BookOutlined } from '@ant-design/icons';
 import { motion } from 'framer-motion';
+import AdvancedJobMatchCanvas from '../../Components/AdvancedJobMatchCanvas.jsx';
 
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
+
+const STAGE_MAP = {
+    NEW: { label: 'Reçu', color: 'blue' },
+    SCREENING: { label: 'Présélection', color: 'purple' },
+    INTERVIEW: { label: 'Entretien', color: 'cyan' },
+    OFFER: { label: 'Offre', color: 'gold' },
+    HIRED: { label: 'Recruté', color: 'green' },
+    REJECTED: { label: 'Non retenu', color: 'red' },
+};
+
+function getStageHistory(submission) {
+    const raw = Array.isArray(submission?.stageHistory) ? submission.stageHistory : [];
+    if (raw.length > 0) {
+        return raw
+            .map((entry) => ({
+                toStage: entry?.toStage || 'NEW',
+                changedAt: entry?.changedAt || null,
+                note: entry?.note || '',
+                source: entry?.source || 'system',
+            }))
+            .sort((a, b) => new Date(a.changedAt || 0) - new Date(b.changedAt || 0));
+    }
+    return [{
+        toStage: submission?.stage || 'NEW',
+        changedAt: submission?.updatedAt || submission?.createdAt || null,
+        note: 'Historique simplifié (ancienne candidature)',
+        source: 'system',
+    }];
+}
+
+function sourceBadgeMeta(source) {
+    const normalized = String(source || 'system').toLowerCase();
+    if (normalized === 'hr') return { label: 'RH', color: 'purple' };
+    if (normalized === 'candidate') return { label: 'Candidat', color: 'blue' };
+    return { label: 'Système', color: 'default' };
+}
+
+function plagiarismTagMeta(report = {}) {
+    const level = String(report?.level || 'low').toLowerCase();
+    if (level === 'high') return { color: 'red', label: 'Risque élevé' };
+    if (level === 'medium') return { color: 'orange', label: 'À vérifier' };
+    return { color: 'green', label: 'Faible' };
+}
 
 function CandidateResults() {
     const [submissions, setSubmissions] = useState([]);
@@ -94,6 +138,17 @@ function CandidateResults() {
             key: 'jobRole',
         },
         {
+            title: 'CV Match',
+            dataIndex: ['jobMatchAnalysis', 'score'],
+            key: 'jobMatchScore',
+            render: (score) => typeof score === 'number' ? (
+                <Tag color={score >= 75 ? 'success' : score >= 55 ? 'warning' : 'error'}>
+                    {score} / 100
+                </Tag>
+            ) : '-',
+            sorter: (a, b) => ((a.jobMatchAnalysis?.score || 0) - (b.jobMatchAnalysis?.score || 0))
+        },
+        {
             title: 'Date de passage',
             dataIndex: 'createdAt',
             key: 'createdAt',
@@ -116,6 +171,17 @@ function CandidateResults() {
             onFilter: (value, record) => record.status === value
         },
         {
+            title: 'Pipeline',
+            dataIndex: 'stage',
+            key: 'stage',
+            render: (stage) => {
+                const meta = STAGE_MAP[stage] || STAGE_MAP.NEW;
+                return <Tag color={meta.color}>{meta.label}</Tag>;
+            },
+            filters: Object.entries(STAGE_MAP).map(([value, meta]) => ({ text: meta.label, value })),
+            onFilter: (value, record) => record.stage === value,
+        },
+        {
             title: 'Score',
             dataIndex: 'totalScore',
             key: 'score',
@@ -125,6 +191,17 @@ function CandidateResults() {
                 </Tag>
             ) : '-',
             sorter: (a, b) => (a.totalScore || 0) - (b.totalScore || 0)
+        },
+        {
+            title: 'Plagiat',
+            dataIndex: 'plagiarismReport',
+            key: 'plagiarismReport',
+            render: (report) => {
+                const score = Number(report?.score || 0);
+                const meta = plagiarismTagMeta(report);
+                return <Tag color={meta.color}>{meta.label} ({score})</Tag>;
+            },
+            sorter: (a, b) => ((a.plagiarismReport?.score || 0) - (b.plagiarismReport?.score || 0)),
         },
         {
             title: 'Actions',
@@ -386,10 +463,203 @@ function CandidateResults() {
                                 >
                                     {selectedDetail.totalScore} / 100
                                 </Tag>
+                                {typeof selectedDetail.jobMatchAnalysis?.score === 'number' && (
+                                    <Tag color={selectedDetail.jobMatchAnalysis.score >= 75 ? 'success' : selectedDetail.jobMatchAnalysis.score >= 55 ? 'warning' : 'error'}>
+                                        CV Match {selectedDetail.jobMatchAnalysis.score} / 100
+                                    </Tag>
+                                )}
+                                {selectedDetail.plagiarismReport && (
+                                    <Tag color={plagiarismTagMeta(selectedDetail.plagiarismReport).color}>
+                                        Plagiat: {plagiarismTagMeta(selectedDetail.plagiarismReport).label} ({Number(selectedDetail.plagiarismReport.score || 0)})
+                                    </Tag>
+                                )}
                             </div>
                         </div>
 
                         <Tabs defaultActiveKey="1">
+                            <TabPane tab="Match CV" key="cv-match">
+                                <AdvancedJobMatchCanvas jobMatch={selectedDetail.jobMatchAnalysis || {}} variant="full" />
+                                <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                    <Paragraph style={{ marginBottom: 12 }}>
+                                        {selectedDetail.jobMatchAnalysis?.summary || "Aucune synthèse textuelle pour cette candidature."}
+                                    </Paragraph>
+                                    {(selectedDetail.jobMatchAnalysis?.matchedSkills || []).length > 0 && (
+                                        <>
+                                            <Text strong>Compétences alignées</Text>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '8px 0 16px' }}>
+                                                {selectedDetail.jobMatchAnalysis.matchedSkills.map((skill) => (
+                                                    <Tag key={skill} color="green">{skill}</Tag>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                    {(selectedDetail.jobMatchAnalysis?.missingSkills || []).length > 0 && (
+                                        <>
+                                            <Text strong>Compétences à renforcer</Text>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                                                {selectedDetail.jobMatchAnalysis.missingSkills.map((skill) => (
+                                                    <Tag key={skill} color="red">{skill}</Tag>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                    {(selectedDetail.jobMatchAnalysis?.candidateActionPlan?.priorities || []).length > 0 && (
+                                        <>
+                                            <Divider style={{ margin: '14px 0' }} />
+                                            <Text strong>Plan d'amélioration recommandé</Text>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                                                {selectedDetail.jobMatchAnalysis.candidateActionPlan.priorities.map((item) => (
+                                                    <Tag
+                                                        key={`${item.skill}-${item.priority}`}
+                                                        color={item.priority === 'high' ? 'error' : item.priority === 'medium' ? 'warning' : 'default'}
+                                                    >
+                                                        {item.skill} ({item.priority})
+                                                    </Tag>
+                                                ))}
+                                            </div>
+                                            {(selectedDetail.jobMatchAnalysis?.candidateActionPlan?.nextSteps || []).length > 0 && (
+                                                <ul style={{ marginTop: 10, paddingLeft: 18 }}>
+                                                    {selectedDetail.jobMatchAnalysis.candidateActionPlan.nextSteps.map((step, idx) => (
+                                                        <li key={idx}>
+                                                            <Text type="secondary">{step}</Text>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </TabPane>
+
+                            <TabPane tab="🧠 Insights IA" key="insights">
+                                {(() => {
+                                    const jm = selectedDetail.jobMatchAnalysis || {};
+                                    const enriched = jm.enrichedCvSignals || {};
+                                    const insights = jm.matchEngine?.creativeInsights || [];
+                                    const dims = jm.matchEngine?.dimensions || {};
+                                    const actionPlan = jm.candidateActionPlan || {};
+                                    return (
+                                        <div style={{ display: 'grid', gap: 20, padding: '8px 0' }}>
+
+                                            {/* Score dimensions */}
+                                            {Object.keys(dims).length > 0 && (
+                                                <div>
+                                                    <Text strong style={{ fontSize: 14 }}>📐 Score multi-dimensionnel (14 axes)</Text>
+                                                    <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                                                        {[
+                                                            { key: 'technicalFit',      label: 'Adéquation technique', color: '#6366f1' },
+                                                            { key: 'educationFit',      label: 'Formation',            color: '#8b5cf6' },
+                                                            { key: 'certificationBoost',label: 'Certifications',       color: '#f59e0b' },
+                                                            { key: 'languageFit',       label: 'Langues',              color: '#06b6d4' },
+                                                            { key: 'industryAlignment', label: 'Secteur',              color: '#10b981' },
+                                                            { key: 'projectEvidence',   label: 'Projets',              color: '#3b82f6' },
+                                                            { key: 'quantifiedImpact',  label: 'Impact chiffré',       color: '#f97316' },
+                                                            { key: 'leadershipSignal',  label: 'Leadership',           color: '#ef4444' },
+                                                            { key: 'experienceFit',     label: 'Expérience',           color: '#84cc16' },
+                                                        ].filter(d => typeof dims[d.key] === 'number').map(d => (
+                                                            <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                <Text style={{ minWidth: 150, fontSize: 12 }}>{d.label}</Text>
+                                                                <Progress percent={dims[d.key]} size="small" strokeColor={d.color} style={{ flex: 1, margin: 0 }} />
+                                                                <Text style={{ minWidth: 32, fontSize: 12, textAlign: 'right' }}>{dims[d.key]}</Text>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* CV Signals */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                {enriched.educationLevel && (
+                                                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                        <Text strong style={{ fontSize: 12 }}>🎓 Formation détectée</Text>
+                                                        <div style={{ marginTop: 6 }}><Tag color="blue">{enriched.educationLevel}</Tag></div>
+                                                    </div>
+                                                )}
+                                                {enriched.certifications?.length > 0 && (
+                                                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                        <Text strong style={{ fontSize: 12 }}>🏅 Certifications</Text>
+                                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                                            {enriched.certifications.map(c => <Tag key={c} color="gold">{c}</Tag>)}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {enriched.languages?.length > 0 && (
+                                                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                        <Text strong style={{ fontSize: 12 }}>🌐 Langues</Text>
+                                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                                            {enriched.languages.map(l => <Tag key={l} color="cyan">{l}</Tag>)}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {enriched.industryDomains?.length > 0 && (
+                                                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                        <Text strong style={{ fontSize: 12 }}>🏢 Secteurs</Text>
+                                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                                            {enriched.industryDomains.map(d => <Tag key={d} color="purple">{d}</Tag>)}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                    <Text strong style={{ fontSize: 12 }}>📊 Impact chiffré</Text>
+                                                    <div style={{ marginTop: 6 }}>
+                                                        {enriched.quantifiedAchievements > 0
+                                                            ? <Tag color={enriched.quantifiedAchievements >= 2 ? 'green' : 'orange'}>{enriched.quantifiedAchievements} réalisation(s)</Tag>
+                                                            : <Text type="secondary" style={{ fontSize: 12 }}>Non détecté — ajoutez des métriques à votre CV</Text>}
+                                                    </div>
+                                                </div>
+                                                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                    <Text strong style={{ fontSize: 12 }}>🎯 Leadership</Text>
+                                                    <div style={{ marginTop: 6 }}>
+                                                        {enriched.leadershipSignals > 0
+                                                            ? <Tag color="green">{enriched.leadershipSignals} signal(s)</Tag>
+                                                            : <Text type="secondary" style={{ fontSize: 12 }}>Non détecté</Text>}
+                                                    </div>
+                                                </div>
+                                                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                                                    <Text strong style={{ fontSize: 12 }}>💻 Projets & présence</Text>
+                                                    <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                                        {enriched.hasOpenSourceContributions && <Tag color="green">Open Source</Tag>}
+                                                        {enriched.hasLiveProjects && <Tag color="green">En ligne</Tag>}
+                                                        {!enriched.hasOpenSourceContributions && !enriched.hasLiveProjects && <Text type="secondary" style={{ fontSize: 12 }}>Ajoutez GitHub/portfolio</Text>}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Creative insights */}
+                                            {insights.length > 0 && (
+                                                <div style={{ background: 'linear-gradient(135deg, #eff6ff, #f5f3ff)', padding: 16, borderRadius: 12, border: '1px solid #ddd6fe' }}>
+                                                    <Text strong style={{ fontSize: 13 }}>💡 Analyse narrative IA</Text>
+                                                    <ul style={{ paddingLeft: 18, margin: '10px 0 0' }}>
+                                                        {insights.map((line, i) => (
+                                                            <li key={i} style={{ marginBottom: 7, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
+                                                                {line.replace(/\*\*/g, '')}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            {/* Action plan next steps */}
+                                            {actionPlan.nextSteps?.length > 0 && (
+                                                <div style={{ background: '#f0fdf4', padding: 16, borderRadius: 12, border: '1px solid #bbf7d0' }}>
+                                                    <Text strong style={{ fontSize: 13, color: '#15803d' }}>✅ Plan d'action personnalisé</Text>
+                                                    <ul style={{ paddingLeft: 18, margin: '10px 0 0' }}>
+                                                        {actionPlan.nextSteps.map((step, i) => (
+                                                            <li key={i} style={{ marginBottom: 6, fontSize: 13, color: '#374151' }}>{step}</li>
+                                                        ))}
+                                                    </ul>
+                                                    {actionPlan.readinessLabel && (
+                                                        <Tag color={actionPlan.readinessLabel.includes('Prêt') ? 'green' : actionPlan.readinessLabel.includes('Bon') ? 'blue' : 'orange'} style={{ marginTop: 10 }}>
+                                                            {actionPlan.readinessLabel}
+                                                        </Tag>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </TabPane>
+
                             <TabPane tab="Feedback IA" key="1">
                                 <div style={{ background: '#f8fafc', padding: 20, borderRadius: 12, border: '1px solid #e2e8f0' }}>
                                     <Title level={5} style={{ color: '#3b82f6', marginBottom: 12 }}>
@@ -445,7 +715,11 @@ function CandidateResults() {
                                             { label: 'Date de passage', value: new Date(selectedDetail.createdAt).toLocaleString('fr-FR') },
                                             { label: 'Durée', value: selectedDetail.timeSpent ? `${Math.round(selectedDetail.timeSpent / 60)} minutes` : 'N/A' },
                                             { label: 'Nombre de questions', value: selectedDetail.answers?.length || 0 },
-                                            { label: 'Questions correctes', value: selectedDetail.correctAnswers || 0 }
+                                            { label: 'Questions correctes', value: selectedDetail.correctAnswers || 0 },
+                                            {
+                                                label: 'Score anti-plagiat',
+                                                value: `${Number(selectedDetail?.plagiarismReport?.score || 0)} / 100 (${plagiarismTagMeta(selectedDetail?.plagiarismReport).label})`
+                                            }
                                         ]}
                                         renderItem={item => (
                                             <List.Item>
@@ -456,6 +730,37 @@ function CandidateResults() {
                                             </List.Item>
                                         )}
                                     />
+                                    <Divider />
+                                    <Title level={5} style={{ marginTop: 0 }}>Historique des étapes</Title>
+                                    <div style={styles.timelineWrap}>
+                                        {getStageHistory(selectedDetail).map((entry, idx, arr) => {
+                                            const meta = STAGE_MAP[entry.toStage] || STAGE_MAP.NEW;
+                                            const sourceMeta = sourceBadgeMeta(entry.source);
+                                            const isLast = idx === arr.length - 1;
+                                            return (
+                                                <div key={`${entry.toStage}-${idx}`} style={styles.timelineItem}>
+                                                    <div style={styles.timelineRail}>
+                                                        <span style={styles.timelineDot} />
+                                                        {!isLast && <span style={styles.timelineLine} />}
+                                                    </div>
+                                                    <div style={styles.timelineContent}>
+                                                        <Space wrap>
+                                                            <Tag color={meta.color} style={{ margin: 0 }}>{meta.label}</Tag>
+                                                            <Tag color={sourceMeta.color} style={{ margin: 0 }}>{sourceMeta.label}</Tag>
+                                                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                {entry.changedAt ? new Date(entry.changedAt).toLocaleString('fr-FR') : 'Date inconnue'}
+                                                            </Text>
+                                                        </Space>
+                                                        {entry.note ? (
+                                                            <div style={{ marginTop: 4 }}>
+                                                                <Text type="secondary" style={{ fontSize: 12 }}>{entry.note}</Text>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </TabPane>
                         </Tabs>
@@ -495,6 +800,43 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 12
+    },
+    timelineWrap: {
+        marginTop: 12,
+        border: '1px solid #e2e8f0',
+        borderRadius: 10,
+        background: '#f8fafc',
+        padding: '10px 12px',
+    },
+    timelineItem: {
+        display: 'flex',
+        gap: 8,
+    },
+    timelineRail: {
+        width: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        flexShrink: 0,
+    },
+    timelineDot: {
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        marginTop: 6,
+        background: '#3b82f6',
+    },
+    timelineLine: {
+        width: 2,
+        minHeight: 16,
+        flex: 1,
+        marginTop: 2,
+        background: '#cbd5e1',
+    },
+    timelineContent: {
+        flex: 1,
+        minWidth: 0,
+        paddingBottom: 8,
     }
 };
 

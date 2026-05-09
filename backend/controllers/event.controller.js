@@ -57,7 +57,7 @@ async function getEventById(req, res) {
 }
 
 /**
- * POST /events — create event (HR/admin only)
+ * POST /events — create event (HR only)
  */
 async function createEvent(req, res) {
     try {
@@ -112,14 +112,14 @@ async function registerToEvent(req, res) {
 }
 
 /**
- * PUT /events/:id — update event (HR/admin only)
+ * PUT /events/:id — update event (HR only)
  */
 async function updateEvent(req, res) {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ status: false, message: 'Événement introuvable.' });
 
-        if (req.user.role !== 'admin' && event.organizer.toString() !== req.user.id) {
+        if (event.organizer.toString() !== req.user.id) {
             return res.status(403).json({ status: false, message: 'Accès refusé.' });
         }
 
@@ -134,14 +134,14 @@ async function updateEvent(req, res) {
 }
 
 /**
- * DELETE /events/:id — delete event (HR/admin)
+ * DELETE /events/:id — delete event (HR)
  */
 async function deleteEvent(req, res) {
     try {
         const event = await Event.findById(req.params.id);
         if (!event) return res.status(404).json({ status: false, message: 'Événement introuvable.' });
 
-        if (req.user.role !== 'admin' && event.organizer.toString() !== req.user.id) {
+        if (event.organizer.toString() !== req.user.id) {
             return res.status(403).json({ status: false, message: 'Accès refusé.' });
         }
 

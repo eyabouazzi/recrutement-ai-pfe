@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Button, Space, message, Typography, Spin, List, Tag, Divider, Form, Input, Select, Modal, DatePicker, InputNumber, Table } from 'antd';
+import { Card, Button, Space, message, Typography, Spin, List, Tag, Divider, Form, Input, Select, Modal, DatePicker, InputNumber, Table, Switch } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, RobotOutlined, LinkOutlined, ReloadOutlined, DatabaseOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -11,6 +11,7 @@ import {
     generateAutoQuestions,
     updateTest,
     regenerateQuestion,
+    markQuestionReviewed,
     listQuestionBank,
     attachBankQuestion,
 } from '../../api/tests';
@@ -45,9 +46,17 @@ function TestManage() {
             const data = await getTestById(id);
             setTest(data.test);
             setQuestions(data.questions);
+            const ap = data.test.advancedPipeline || {};
             infoForm.setFieldsValue({
                 ...data.test,
                 submissionDeadline: data.test.submissionDeadline ? dayjs(data.test.submissionDeadline) : undefined,
+                advancedPipeline: {
+                    enabled: ap.enabled === true,
+                    matchPassThreshold: ap.matchPassThreshold ?? 45,
+                    removeOnCvMismatch: ap.removeOnCvMismatch !== false,
+                    removeOnFailedAssessment: ap.removeOnFailedAssessment !== false,
+                    advanceStageOnPass: ap.advanceStageOnPass !== false,
+                },
             });
         } catch (error) {
             message.error(error.message || 'Impossible de charger le test');
@@ -320,6 +329,49 @@ function TestManage() {
                     <Form.Item label="Webhook (POST après soumission)" name="webhookUrl">
                         <Input placeholder="https://..." />
                     </Form.Item>
+                    <Divider orientation="left">Notifications pipeline (matching & résultats)</Divider>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                        Déclenchement automatique : matching CV, refus justifié, réussite / échec au test, suppressions de candidature selon les options.
+                    </Text>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <Form.Item
+                            label="Activer le pipeline avancé"
+                            name={['advancedPipeline', 'enabled']}
+                            valuePropName="checked"
+                            tooltip="Sinon, comportement classique (notification simple de fin de test)."
+                        >
+                            <Switch />
+                        </Form.Item>
+                        <Form.Item
+                            label="Seuil matching CV (%)"
+                            name={['advancedPipeline', 'matchPassThreshold']}
+                            tooltip="Sous ce score, refus « matching négatif » (si suppression activée, la candidature est retirée)."
+                        >
+                            <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item
+                            label="Supprimer si matching insuffisant"
+                            name={['advancedPipeline', 'removeOnCvMismatch']}
+                            valuePropName="checked"
+                        >
+                            <Switch />
+                        </Form.Item>
+                        <Form.Item
+                            label="Supprimer si échec au test"
+                            name={['advancedPipeline', 'removeOnFailedAssessment']}
+                            valuePropName="checked"
+                        >
+                            <Switch />
+                        </Form.Item>
+                        <Form.Item
+                            label="Étape SCREENING après réussite"
+                            name={['advancedPipeline', 'advanceStageOnPass']}
+                            valuePropName="checked"
+                            tooltip="Passe automatiquement la candidature en revue après test réussi + matching OK."
+                        >
+                            <Switch />
+                        </Form.Item>
+                    </div>
                     <Button type="primary" htmlType="submit" loading={updatingInfo}>
                         Sauvegarder les modifications
                     </Button>

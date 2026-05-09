@@ -15,6 +15,7 @@ const companyRouter = require('./routes/company.route');
 const eventRouter = require('./routes/event.route');
 const favoriteRouter = require('./routes/favorite.route');
 const appNotificationRouter = require('./routes/appNotification.route');
+const dashboardRouter = require('./routes/dashboard.route');
 const adminRouter = require('./routes/admin.route');
 
 const cors = require('cors');
@@ -43,6 +44,7 @@ app.use('/companies', companyRouter);
 app.use('/events', eventRouter);
 app.use('/favorites', favoriteRouter);
 app.use('/app-notifications', appNotificationRouter);
+app.use('/dashboard', dashboardRouter);
 app.use('/admin', adminRouter);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

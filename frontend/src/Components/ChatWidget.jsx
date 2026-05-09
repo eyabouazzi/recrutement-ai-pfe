@@ -117,6 +117,23 @@ export default function ChatWidget() {
     }, [isOpen, token]);
 
     useEffect(() => {
+        if (!token) return undefined;
+
+        const handleExternalOpen = async (event) => {
+            const chatId = event?.detail?.chatId;
+            if (!chatId) return;
+
+            setIsOpen(true);
+            setActiveTab('conversations');
+            await openChat(chatId);
+            fetchChats();
+        };
+
+        window.addEventListener('recruitai:open-chat', handleExternalOpen);
+        return () => window.removeEventListener('recruitai:open-chat', handleExternalOpen);
+    }, [token]);
+
+    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [selectedChat?.messages]);
 
@@ -251,7 +268,7 @@ export default function ChatWidget() {
                 {
                     testTitle:
                         selectedChat?.jobId?.title ||
-                        (user?.role === 'HR' || user?.role === 'admin' ? 'Assistant RH' : 'Assistant candidat'),
+                        (user?.role === 'HR' ? 'Assistant RH' : 'Assistant candidat'),
                     jobRole: selectedChat?.jobId?.jobRole || user?.preferredSector || ''
                 },
                 localHistory

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './authContext';
-import { message } from 'antd';
+import { App as AntdApp } from 'antd';
 import { SoundOutlined } from '@ant-design/icons';
 import { getUnreadCount as getUnreadCountApi } from '../api/appNotification';
 
@@ -26,6 +26,27 @@ const appendNotification = (previous, incoming) => {
     return [...previous, incoming];
 };
 
+const getAllowedNotificationTypes = (role) => {
+    if (role === 'HR') {
+        return new Set(['CANDIDATE_SUBMITTED', 'SUBMISSION_CREATED', 'SUSPICIOUS_PASTE_ACTIVITY', 'CHEATING_ALERT', 'general']);
+    }
+    if (role === 'candidat') {
+        return new Set(['APPLICATION_STATUS_CHANGED', 'INTERVIEW_SCHEDULED', 'NEW_MATCH_RECOMMENDATION', 'general']);
+    }
+    return null;
+};
+
+const shouldReceiveNotificationForRole = (notification, role) => {
+    if (!notification || !role) return false;
+    const targetRole = String(notification.targetRole || notification?.data?.targetRole || '').trim();
+    if (targetRole && targetRole !== 'all' && targetRole !== role) return false;
+    if (targetRole === role || targetRole === 'all') return true;
+    const allowedTypes = getAllowedNotificationTypes(role);
+    if (!allowedTypes) return true;
+    const type = String(notification.type || 'general');
+    return allowedTypes.has(type);
+};
+
 export const useWebSocket = () => {
     const context = useContext(WebSocketContext);
     if (!context) {
@@ -35,6 +56,7 @@ export const useWebSocket = () => {
 };
 
 export const WebSocketProvider = ({ children }) => {
+    const { message } = AntdApp.useApp();
     const [socket, setSocket] = useState(null);
     const [connected, setConnected] = useState(false);
     const [realTimeStats, setRealTimeStats] = useState({
@@ -87,6 +109,7 @@ export const WebSocketProvider = ({ children }) => {
         });
 
         newSocket.on('applicationNotification', (notification) => {
+            if (!shouldReceiveNotificationForRole(notification, user?.role)) return;
             setNotifications((prev) => appendNotification(prev, notification));
             if (notification?.read !== true) {
                 setUnreadCount((prev) => prev + 1);
@@ -107,6 +130,31 @@ export const WebSocketProvider = ({ children }) => {
                         content: `Un candidat a termine "${testTitle}" (score: ${score})`,
                         icon: <SoundOutlined />,
                         duration: 6,
+                    });
+                    break;
+                }
+                case 'SUSPICIOUS_PASTE_ACTIVITY': {
+                    const candidateName = notification?.data?.candidateName || 'Un candidat';
+                    const score = notification?.data?.plagiarismScore != null
+                        ? ` (score plagiat: ${notification.data.plagiarismScore})`
+                        : '';
+                    message.warning({
+                        content: `${candidateName} a un comportement suspect de collage${score}`,
+                        icon: <SoundOutlined />,
+                        duration: 7,
+                    });
+                    break;
+                }
+                case 'CHEATING_ALERT': {
+                    const candidateName = notification?.data?.candidateName || 'Un candidat';
+                    const trustScore = notification?.data?.trustScore;
+                    const trustLabel = Number.isFinite(Number(trustScore))
+                        ? ` (trust score: ${trustScore})`
+                        : '';
+                    message.error({
+                        content: `Alerte triche: ${candidateName}${trustLabel}`,
+                        icon: <SoundOutlined />,
+                        duration: 8,
                     });
                     break;
                 }

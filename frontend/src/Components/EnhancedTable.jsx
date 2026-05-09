@@ -68,7 +68,11 @@ export function EnhancedTable({
                                     type="link"
                                     size="small"
                                     icon={action.icon}
-                                    onClick={() => action.onClick(record)}
+                                    danger={Boolean(action.danger)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        action.onClick(record);
+                                    }}
                                     style={{ padding: 4 }}
                                 >
                                     {action.label}
@@ -90,7 +94,12 @@ export function EnhancedTable({
                             }}
                             trigger={['click']}
                         >
-                            <Button type="link" size="small" icon={<MoreOutlined />} />
+                            <Button
+                                type="link"
+                                size="small"
+                                icon={<MoreOutlined />}
+                                onClick={(event) => event.stopPropagation()}
+                            />
                         </Dropdown>
                     )}
                 </Space>

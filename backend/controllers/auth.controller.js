@@ -5,7 +5,9 @@ const sendEmail = require('../utils/mailer');
 const { smtpConfigured } = require('../utils/emailNotifications');
 const { signUpSchema, loginSchema, changePasswordSchema } = require('../schemas/auth.schema');
 const { generateToken } = require('../utils/jwt');
-const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
+const COMPANY_PROFILE_SELECT = 'name status sector city website approvalNote rejectionReason approvedAt description phone logo linkedin socialLinks address applicationEmail bookingLink';
 
 function escapeRegex(value = '') {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -16,6 +18,14 @@ function findUserByEmail(email) {
     return userModel.findOne({
         email: new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i'),
     });
+}
+
+function normalizeRoleInput(role) {
+    const raw = String(role || '').trim().toLowerCase();
+    if (!raw) return 'candidat';
+    if (['candidat', 'candidate', 'user', 'admin'].includes(raw)) return 'candidat';
+    if (['rh', 'hr', 'recruiter'].includes(raw)) return 'HR';
+    return 'candidat';
 }
 
 async function signUp(req, res) {
@@ -54,7 +64,7 @@ async function signUp(req, res) {
             password: password,
             confirmPassword: confirmPassword,
             dob: dob,
-            role: role || 'candidat',
+            role: normalizeRoleInput(role),
             emailVerified: true,
         };
 
@@ -126,6 +136,12 @@ async function login(req, res) {
                 message: "Invalid email or password"
             });
         }
+        if (user.role !== 'HR' && user.role !== 'candidat') {
+            return res.status(403).json({
+                status: false,
+                message: "Ce role n'est plus supporte. Contactez votre administrateur systeme."
+            });
+        }
         // cas2.2 : password match -> generate authentification token ( pasport , jwt)
         const token = generateToken(user._id);
         res.status(200).json({
@@ -147,7 +163,7 @@ async function login(req, res) {
 async function getMe(req, res) {
     try {
         const user = await userModel.findById(req.user.id)
-            .populate('companyId', 'name status sector city website approvalNote rejectionReason approvedAt');
+            .populate('companyId', COMPANY_PROFILE_SELECT);
         res.status(200).json({
             status: true,
             message: "User found successfully",
@@ -220,10 +236,14 @@ async function forgetPassword(req, res) {
             });
         }
 
-        // Generate reset token (JWT)
-        const resetToken = generateToken(user._id);
+        // Generate one-time reset token (stored hashed in DB, expires in 30 minutes)
+        const resetTokenRaw = crypto.randomBytes(32).toString('hex');
+        const resetTokenHash = crypto.createHash('sha256').update(resetTokenRaw).digest('hex');
+        user.resetPasswordToken = resetTokenHash;
+        user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000);
+        await user.save();
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+        const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetTokenRaw)}`;
 
         // Send reset email (do not fail the request if mail is misconfigured)
         const options = {
@@ -283,17 +303,11 @@ async function resetPassword(req, res) {
             });
         }
 
-        let decoded;
-        try {
-            decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
-        } catch (e) {
-            return res.status(400).json({
-                status: false,
-                message: "Invalid or expired reset link"
-            });
-        }
-
-        const user = await userModel.findById(decoded.id);
+        const resetTokenHash = crypto.createHash('sha256').update(String(resetToken)).digest('hex');
+        const user = await userModel.findOne({
+            resetPasswordToken: resetTokenHash,
+            resetPasswordExpires: { $gt: new Date() },
+        }).select('+resetPasswordToken +resetPasswordExpires');
         if (!user) {
             return res.status(400).json({
                 status: false,
@@ -304,6 +318,8 @@ async function resetPassword(req, res) {
         // Update password (user pre-save hook hashes it)
         user.password = newPassword;
         user.confirmPassword = undefined;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
         await user.save();
 
         return res.status(200).json({

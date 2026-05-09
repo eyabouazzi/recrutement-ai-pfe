@@ -14,6 +14,13 @@ const draftTelemetrySchema = new mongoose.Schema({
     fullscreenExitCount: { type: Number, default: 0, min: 0 },
 }, { _id: false });
 
+const draftQuestionMetricsSchema = new mongoose.Schema({
+    dwellSeconds: { type: Number, default: 0, min: 0 },
+    keystrokes: { type: Number, default: 0, min: 0 },
+    backspaces: { type: Number, default: 0, min: 0 },
+    pastes: { type: Number, default: 0, min: 0 },
+}, { _id: false });
+
 const deviceFingerprintSchema = new mongoose.Schema({
     userAgent: { type: String, default: '' },
     ip: { type: String, default: '' },
@@ -30,6 +37,7 @@ const testDraftSchema = new mongoose.Schema({
     startedAt: { type: Date, default: Date.now },
     lastActivityAt: { type: Date, default: Date.now },
     telemetry: { type: draftTelemetrySchema, default: () => ({}) },
+    questionTimeline: { type: Map, of: draftQuestionMetricsSchema, default: {} },
     deviceFingerprint: { type: deviceFingerprintSchema, default: () => ({}) },
 }, { timestamps: true });
 

@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, MapPin, Briefcase, Clock, Building2,
-  Users, Star, Bookmark, Share2, CheckCircle, Globe,
-  Award, ExternalLink
+  Users, Star, Bookmark, Share2, CheckCircle, Globe, MessageCircle,
+  Award
 } from 'lucide-react';
 import { Button, Tag, Spin, message, Typography } from 'antd';
 import { useAuth } from '../../contexts/authContext';
 import { getPublicTestById } from '../../api/tests';
 import { addFavorite, checkFavorite, removeFavorite } from '../../api/favorite';
+import { createRecruitmentChat } from '../../api/chat';
 import { baseUrl } from '../../api/api';
 import './JobDetail.css';
 
@@ -111,6 +112,45 @@ export default function JobDetail() {
     }
   };
 
+  const handleContactRecruiter = async () => {
+    if (!isAuthenticated) {
+      message.info('Connectez-vous pour contacter le recruteur.');
+      navigate('/login');
+      return;
+    }
+
+    if (user?.role !== 'candidat') {
+      message.warning('La messagerie de recrutement est reservee aux comptes candidat.');
+      return;
+    }
+
+    if (!recruiter?._id) {
+      message.error('Recruteur introuvable pour cette offre.');
+      return;
+    }
+
+    try {
+      const response = await createRecruitmentChat({
+        recruiterId: recruiter._id,
+        jobId: job._id,
+        companyId: company?._id,
+        initialMessage: `Bonjour, je suis interesse(e) par l'offre "${job.title}".`,
+      });
+
+      if (!response?.status || !response?.chat?._id) {
+        throw new Error(response?.message || 'Impossible d ouvrir la conversation');
+      }
+
+      window.dispatchEvent(new CustomEvent('recruitai:open-chat', {
+        detail: { chatId: response.chat._id }
+      }));
+
+      message.success(response.existing ? 'Conversation ouverte.' : 'Conversation demarree avec le recruteur.');
+    } catch (error) {
+      message.error(error.message || 'Impossible de contacter le recruteur');
+    }
+  };
+
   if (loading || !job) {
     return (
       <div className="job-detail-loading">
@@ -164,6 +204,9 @@ export default function JobDetail() {
             </Button>
             <Button icon={<Share2 size={18} />} onClick={handleShare}>
               Partager
+            </Button>
+            <Button icon={<MessageCircle size={18} />} onClick={handleContactRecruiter}>
+              Contacter le recruteur
             </Button>
             <Button type="primary" size="large" onClick={handleApply} className="apply-btn">
               Postuler maintenant
@@ -239,11 +282,6 @@ export default function JobDetail() {
                     </div>
                   )}
                 </div>
-                {company?._id && (
-                  <Button type="link" onClick={() => navigate(`/companies/${company._id}`)} style={{ paddingLeft: 0 }}>
-                    Voir le profil entreprise
-                  </Button>
-                )}
                 {company?.website && (
                   <a href={company.website} target="_blank" rel="noopener noreferrer" className="company-website">
                     <Globe size={16} /> Visiter le site web
@@ -257,11 +295,10 @@ export default function JobDetail() {
                 {recruiter?.city && (
                   <p style={{ marginTop: 8, color: '#64748b' }}>{recruiter.city}</p>
                 )}
-                {recruiter?._id && (
-                  <Button icon={<ExternalLink size={16} />} onClick={() => navigate(`/recruiters/${recruiter._id}`)} style={{ marginTop: 12 }}>
-                    Consulter le profil recruteur
-                  </Button>
-                )}
+                <Button icon={<MessageCircle size={16} />} onClick={handleContactRecruiter} style={{ marginTop: 12 }}>
+                  Envoyer un message
+                </Button>
+
               </div>
 
               <div className="apply-card">

@@ -1,33 +1,30 @@
 const express = require('express');
 const router = express.Router();
-const { protect: AuthMw, restrictTo } = require('../middlewares/auth.middleware');
-const {
-    submitTest,
-    getMyResults,
-    getResultDetails,
-    getAllSubmissions,
-    updateSubmissionStage,
-    addSubmissionNote,
-    getCandidateApplications,
-    updateSubmissionPipeline,
-    getHrActivity,
-} = require('../controllers/submission.controller');
+
+const { protect, restrictTo } = require('../middlewares/auth.middleware');
 const draftController = require('../controllers/draft.controller');
-const { submitLimiter } = require('../middlewares/rateLimiters');
+const submissionController = require('../controllers/submission.controller');
 
-router.get('/hr-activity', AuthMw, restrictTo('HR'), getHrActivity);
-router.get('/draft/:testId', AuthMw, restrictTo('candidat'), draftController.getDraft);
-router.put('/draft/:testId', AuthMw, restrictTo('candidat'), draftController.saveDraft);
-router.delete('/draft/:testId', AuthMw, restrictTo('candidat'), draftController.deleteDraft);
+router.post('/submit', protect, restrictTo('candidat'), submissionController.submitTest);
 
-router.post('/submit', AuthMw, restrictTo('candidat'), submitLimiter, submitTest);
-router.get('/my-results', AuthMw, restrictTo('candidat'), getMyResults);
-router.get('/all', AuthMw, restrictTo('HR'), getAllSubmissions);
-router.get('/my-applications', AuthMw, restrictTo('candidat'), getCandidateApplications);
-router.get('/:id', AuthMw, restrictTo('HR', 'candidat'), getResultDetails);
-router.put('/:id/stage', AuthMw, restrictTo('HR'), updateSubmissionStage);
-router.patch('/:id/stage', AuthMw, restrictTo('HR'), updateSubmissionStage);
-router.patch('/:id/pipeline', AuthMw, restrictTo('HR'), updateSubmissionPipeline);
-router.post('/:id/notes', AuthMw, restrictTo('HR'), addSubmissionNote);
+router.get('/draft/:testId', protect, restrictTo('candidat'), draftController.getDraft);
+router.put('/draft/:testId', protect, restrictTo('candidat'), draftController.saveDraft);
+router.delete('/draft/:testId', protect, restrictTo('candidat'), draftController.deleteDraft);
+router.get('/drafts', protect, restrictTo('candidat'), draftController.listDrafts);
+
+router.get('/my-results', protect, restrictTo('candidat'), submissionController.getMyResults);
+router.get('/my-applications', protect, restrictTo('candidat'), submissionController.getCandidateApplications);
+
+router.get('/all', protect, restrictTo('HR', 'admin'), submissionController.getAllSubmissions);
+router.get('/hr-activity', protect, restrictTo('HR', 'admin'), submissionController.getHrActivity);
+router.patch('/bulk/stage', protect, restrictTo('HR', 'admin'), submissionController.bulkUpdateSubmissionStage);
+
+router.patch('/:id/pipeline', protect, restrictTo('HR', 'admin'), submissionController.updateSubmissionPipeline);
+router.put('/:id/stage', protect, restrictTo('HR', 'admin'), submissionController.updateSubmissionStage);
+router.patch('/:id/stage', protect, restrictTo('HR', 'admin'), submissionController.updateSubmissionStage);
+router.post('/:id/notes', protect, restrictTo('HR', 'admin'), submissionController.addSubmissionNote);
+
+router.post('/cheat/report', protect, submissionController.reportCheatFlag);
+router.get('/:id', protect, restrictTo('candidat', 'HR', 'admin'), submissionController.getResultDetails);
 
 module.exports = router;

@@ -9,10 +9,20 @@ const {
 function buildBaseNotificationQuery(req) {
     const { unreadOnly, type, category, priority, includeArchived } = req.query;
     const query = { userId: req.user.id };
+    const role = String(req.user?.role || '').trim();
 
     if (includeArchived !== 'true') {
         query.archived = { $ne: true };
     }
+    query.$and = query.$and || [];
+    query.$and.push({
+        $or: [
+            { targetRole: role || 'all' },
+            { targetRole: 'all' },
+            { targetRole: { $exists: false } },
+            { targetRole: null },
+        ],
+    });
     query.$or = [
         { expiresAt: null },
         { expiresAt: { $exists: false } },
@@ -38,6 +48,7 @@ function buildBaseNotificationQuery(req) {
  */
 async function getNotifications(req, res) {
     try {
+        const role = String(req.user?.role || '').trim();
         const page = Math.max(1, Number(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
         const skip = (page - 1) * limit;
@@ -54,6 +65,16 @@ async function getNotifications(req, res) {
                 userId: req.user.id,
                 read: false,
                 archived: { $ne: true },
+                $and: [
+                    {
+                        $or: [
+                            { targetRole: role || 'all' },
+                            { targetRole: 'all' },
+                            { targetRole: { $exists: false } },
+                            { targetRole: null },
+                        ],
+                    },
+                ],
                 $or: [
                     { expiresAt: null },
                     { expiresAt: { $exists: false } },
@@ -82,10 +103,21 @@ async function getNotifications(req, res) {
  */
 async function getUnreadCount(req, res) {
     try {
+        const role = String(req.user?.role || '').trim();
         const unreadCount = await AppNotification.countDocuments({
             userId: req.user.id,
             read: false,
             archived: { $ne: true },
+            $and: [
+                {
+                    $or: [
+                        { targetRole: role || 'all' },
+                        { targetRole: 'all' },
+                        { targetRole: { $exists: false } },
+                        { targetRole: null },
+                    ],
+                },
+            ],
             $or: [
                 { expiresAt: null },
                 { expiresAt: { $exists: false } },
@@ -188,6 +220,7 @@ async function createNotification(req, res) {
             channels,
             data,
             expiresAt,
+            targetRole,
         } = req.body;
 
         if (!userId || !title || !message) {
@@ -199,7 +232,6 @@ async function createNotification(req, res) {
 
         if (
             String(userId) !== String(req.user.id) &&
-            req.user.role !== 'admin' &&
             req.user.role !== 'HR'
         ) {
             return res.status(403).json({
@@ -221,6 +253,7 @@ async function createNotification(req, res) {
                 channels,
                 data,
                 expiresAt,
+                targetRole,
             },
             { dedupeWindowMinutes: 0, skipIfDuplicate: false }
         );

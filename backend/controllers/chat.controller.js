@@ -257,8 +257,10 @@ async function createRecruitmentChat(req, res) {
         });
 
         if (chat) {
-            return res.status(400).json({
-                status: false,
+            return res.status(200).json({
+                status: true,
+                chat,
+                existing: true,
                 message: 'Une conversation existe déjà pour cette candidature'
             });
         }

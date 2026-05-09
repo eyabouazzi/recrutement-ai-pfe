@@ -315,6 +315,8 @@ async function getAntiCheatAnalytics(req, res) {
 
         const startDate = parseDateInput(req.query.startDate) || defaultStart;
         const endDate = parseDateInput(req.query.endDate) || now;
+        const rangeStart = startDate <= endDate ? startDate : endDate;
+        const rangeEnd = startDate <= endDate ? endDate : startDate;
         const granularity = ['day', 'week', 'month'].includes(String(req.query.granularity || 'day'))
             ? String(req.query.granularity || 'day')
             : 'day';
@@ -323,8 +325,8 @@ async function getAntiCheatAnalytics(req, res) {
 
         const submissionMatch = {
             createdAt: {
-                $gte: startDate,
-                $lte: endDate,
+                $gte: rangeStart,
+                $lte: rangeEnd,
             },
         };
 
@@ -580,8 +582,8 @@ async function getAntiCheatAnalytics(req, res) {
         res.status(200).json({
             status: true,
             filters: {
-                startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
+                startDate: rangeStart.toISOString(),
+                endDate: rangeEnd.toISOString(),
                 granularity,
                 trustThreshold,
                 recruiterId: req.query.recruiterId || null,

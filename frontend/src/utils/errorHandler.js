@@ -1,4 +1,4 @@
-import { message, notification } from 'antd';
+import { getMessageApi, getNotificationApi } from './antdApp';
 
 // Error codes mapping for better user messages
 const ERROR_CODES = {
@@ -42,6 +42,14 @@ class ErrorHandler {
         };
     }
 
+    get messageApi() {
+        return getMessageApi();
+    }
+
+    get notificationApi() {
+        return getNotificationApi();
+    }
+
     // Handle API errors
     handleApiError(error, context = '') {
         const errorMessage = this.extractErrorMessage(error);
@@ -55,10 +63,16 @@ class ErrorHandler {
             timestamp: new Date().toISOString()
         });
 
-        // Show user-friendly message
-        this.showNotification(errorMessage, severity, context);
+        // Show user-friendly message (skip generic network popups)
+        if (!this.isSilentNetworkError(error)) {
+            this.showNotification(errorMessage, severity, context);
+        }
         
         return errorMessage;
+    }
+
+    isSilentNetworkError(error) {
+        return !error.response && !!error.request;
     }
 
     // Extract meaningful error message from various error formats
@@ -129,13 +143,13 @@ class ErrorHandler {
 
         switch (severity) {
             case SEVERITY.HIGH:
-                notification.error(config);
+                this.notificationApi?.error?.(config);
                 break;
             case SEVERITY.MEDIUM:
-                notification.warning(config);
+                this.notificationApi?.warning?.(config);
                 break;
             case SEVERITY.LOW:
-                notification.info(config);
+                this.notificationApi?.info?.(config);
                 break;
         }
     }
@@ -164,17 +178,17 @@ class ErrorHandler {
 
     // Show success message
     showSuccess(messageText, context = '') {
-        message.success(context ? `${context}: ${messageText}` : messageText);
+        this.messageApi?.success?.(context ? `${context}: ${messageText}` : messageText);
     }
 
     // Show info message
     showInfo(messageText, context = '') {
-        message.info(context ? `${context}: ${messageText}` : messageText);
+        this.messageApi?.info?.(context ? `${context}: ${messageText}` : messageText);
     }
 
     // Show warning message
     showWarning(messageText, context = '') {
-        message.warning(context ? `${context}: ${messageText}` : messageText);
+        this.messageApi?.warning?.(context ? `${context}: ${messageText}` : messageText);
     }
 
     // Handle promise rejections gracefully

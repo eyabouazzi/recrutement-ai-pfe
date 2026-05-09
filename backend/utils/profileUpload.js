@@ -20,10 +20,9 @@ const storage = multer.diskStorage({
 function isAllowedDocument(file) {
     const ext = path.extname(file.originalname || '').toLowerCase();
     const mime = String(file.mimetype || '').toLowerCase();
-    const allowedExtensions = new Set(['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf']);
+    const allowedExtensions = new Set(['.pdf', '.docx', '.txt', '.md', '.rtf']);
     const allowedMimeTypes = new Set([
         'application/pdf',
-        'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/rtf',
         'text/plain',
@@ -34,18 +33,18 @@ function isAllowedDocument(file) {
 }
 
 function fileFilter(req, file, cb) {
-    if (file.fieldname === 'avatar') {
+    if (file.fieldname === 'avatar' || file.fieldname === 'companyLogo') {
         if (String(file.mimetype || '').startsWith('image/')) {
             return cb(null, true);
         }
-        return cb(new Error('Avatar uploads must be image files.'), false);
+        return cb(new Error('Avatar and company logo uploads must be image files.'), false);
     }
 
     if (file.fieldname === 'cv' || file.fieldname === 'file') {
         if (String(file.mimetype || '').startsWith('image/') || isAllowedDocument(file)) {
             return cb(null, true);
         }
-        return cb(new Error('Unsupported file type. Use PDF, DOC, DOCX, TXT, MD, or an image.'), false);
+        return cb(new Error('Unsupported file type. Use PDF, DOCX, TXT, MD, RTF, or an image.'), false);
     }
 
     return cb(new Error('Unsupported upload field.'), false);

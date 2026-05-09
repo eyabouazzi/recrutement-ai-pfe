@@ -3,9 +3,10 @@ import { Typography, Card, Tag, Row, Col, Spin, Empty, Button, message, Steps, S
 import { useNavigate } from 'react-router-dom';
 import { getMyApplications } from '../../api/submissions';
 import { listMyInterviews } from '../../api/interviews';
-import { ClockCircleOutlined, SolutionOutlined, RightOutlined, CheckCircleOutlined, CloseCircleOutlined, UserOutlined, CalendarOutlined, BarChartOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, SolutionOutlined, RightOutlined, CheckCircleOutlined, CloseCircleOutlined, UserOutlined, CalendarOutlined, BarChartOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { motion } from 'framer-motion';
+import AdvancedJobMatchCanvas from '../../Components/AdvancedJobMatchCanvas.jsx';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -18,6 +19,30 @@ const STAGE_MAP = {
     'REJECTED': { label: 'Non retenu', color: 'red', step: 0, icon: CloseCircleOutlined }
 };
 
+function getStageHistory(app) {
+    const raw = Array.isArray(app?.stageHistory) ? app.stageHistory : [];
+    if (raw.length > 0) {
+        return raw
+            .map((entry) => ({
+                fromStage: entry?.fromStage || null,
+                toStage: entry?.toStage || 'NEW',
+                changedAt: entry?.changedAt || entry?.createdAt || null,
+                note: entry?.note || '',
+                source: entry?.source || 'system',
+            }))
+            .sort((a, b) => new Date(a.changedAt || 0) - new Date(b.changedAt || 0));
+    }
+
+    // Backward-compatible fallback for old submissions without stage history.
+    return [{
+        fromStage: null,
+        toStage: app?.stage || 'NEW',
+        changedAt: app?.updatedAt || app?.createdAt || null,
+        note: 'Historique simplifié (ancienne candidature)',
+        source: 'system',
+    }];
+}
+
 export default function MyApplications() {
     const [apps, setApps] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -28,6 +53,7 @@ export default function MyApplications() {
         completed: 0,
         rejected: 0
     });
+    const [expandedTimelines, setExpandedTimelines] = useState({});
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -92,6 +118,17 @@ export default function MyApplications() {
     const getStageProgress = (stage) => {
         const stages = ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED'];
         return stages.indexOf(stage) + 1;
+    };
+
+    const toggleTimeline = (appId) => {
+        setExpandedTimelines((prev) => ({ ...prev, [appId]: !prev[appId] }));
+    };
+
+    const getSourceBadge = (source) => {
+        const normalized = String(source || 'system').toLowerCase();
+        if (normalized === 'hr') return { label: 'RH', color: 'purple' };
+        if (normalized === 'candidate') return { label: 'Candidat', color: 'blue' };
+        return { label: 'Système', color: 'default' };
     };
 
     if (loading) return (
@@ -209,7 +246,12 @@ export default function MyApplications() {
                                     renderItem={app => {
                                         const stage = STAGE_MAP[app.stage] || STAGE_MAP['NEW'];
                                         const test = app.testId || {};
+                                        const jobMatch = app.jobMatchAnalysis || {};
                                         const StageIcon = stage.icon;
+                                        const stageHistory = getStageHistory(app);
+                                        const isExpanded = Boolean(expandedTimelines[app._id]);
+                                        const visibleHistory = isExpanded ? stageHistory : stageHistory.slice(-2);
+                                        const hasHidden = stageHistory.length > visibleHistory.length;
                                         
                                         return (
                                             <motion.div
@@ -248,6 +290,11 @@ export default function MyApplications() {
                                                                 <Tag color={stage.color} icon={<StageIcon />}>
                                                                     {stage.label}
                                                                 </Tag>
+                                                                {typeof jobMatch.score === 'number' && (
+                                                                    <Tag color={jobMatch.score >= 75 ? 'success' : jobMatch.score >= 55 ? 'warning' : 'error'}>
+                                                                        CV Match {jobMatch.score}%
+                                                                    </Tag>
+                                                                )}
                                                             </div>
                                                         }
                                                         description={
@@ -255,6 +302,16 @@ export default function MyApplications() {
                                                                 <Text type="secondary" block>
                                                                     {test.jobRole || 'Poste non spécifié'} • {test.location || 'Remote'}
                                                                 </Text>
+                                                                {typeof jobMatch.score === 'number' && (
+                                                                    <div style={{ marginTop: 10, maxWidth: 560 }}>
+                                                                        <AdvancedJobMatchCanvas jobMatch={jobMatch} variant="compact" />
+                                                                    </div>
+                                                                )}
+                                                                {jobMatch.summary && (
+                                                                    <Text type="secondary" block style={{ marginTop: 6 }}>
+                                                                        {jobMatch.summary}
+                                                                    </Text>
+                                                                )}
                                                                 <Text type="secondary" style={{ fontSize: 12 }}>
                                                                     <ClockCircleOutlined style={{ marginRight: 4 }} />
                                                                     Postulé le {dayjs(app.createdAt).format('DD MMMM YYYY')}
@@ -294,16 +351,103 @@ export default function MyApplications() {
                                                                                         </Text>
                                                                                         <Tag color={tagColor}>{statusLabel}</Tag>
                                                                                     </div>
-                                                                                    <div style={{ marginTop: 6 }}>
+                                                                                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                                                         <Text type="secondary" style={{ fontSize: 12 }}>
                                                                                             Type : {interview.type === 'onsite' ? 'Sur place' : interview.type === 'phone' ? 'Téléphone' : 'Visio'}
                                                                                         </Text>
+                                                                                        {interview.location && (
+                                                                                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                                                                                Lien / Lieu :{' '}
+                                                                                                {interview.location.startsWith('http') ? (
+                                                                                                    <a href={interview.location} target="_blank" rel="noreferrer" style={{ color: '#0ea5e9', textDecoration: 'underline' }}>
+                                                                                                        Rejoindre l'entretien
+                                                                                                    </a>
+                                                                                                ) : (
+                                                                                                    <strong>{interview.location}</strong>
+                                                                                                )}
+                                                                                            </Text>
+                                                                                        )}
+                                                                                        {interview.messageToCandidate && (
+                                                                                            <div style={{ marginTop: 4, padding: '6px 10px', background: 'rgba(255,255,255,0.6)', borderRadius: 6, border: '1px dashed #bae6fd' }}>
+                                                                                                <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>
+                                                                                                    « {interview.messageToCandidate} »
+                                                                                                </Text>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
                                                                             );
                                                                         })()}
                                                                     </>
                                                                 )}
+
+                                                                <div style={styles.timelineWrap}>
+                                                                    <div style={styles.timelineHead}>
+                                                                        <Text strong style={{ fontSize: 12 }}>Historique des étapes</Text>
+                                                                        <Tag color={stage.color} style={{ margin: 0 }}>
+                                                                            Étape actuelle: {stage.label}
+                                                                        </Tag>
+                                                                    </div>
+                                                                    <div style={styles.timelineList}>
+                                                                        {visibleHistory.map((entry, idx) => {
+                                                                            const stageMeta = STAGE_MAP[entry.toStage] || STAGE_MAP.NEW;
+                                                                            const isCurrent = idx === visibleHistory.length - 1;
+                                                                            const isLast = idx === visibleHistory.length - 1;
+                                                                            const label = stageMeta.label || entry.toStage || 'Etape';
+                                                                            const sourceBadge = getSourceBadge(entry.source);
+                                                                            return (
+                                                                                <div key={`${app._id}-${entry.toStage}-${idx}`} style={styles.timelineItem}>
+                                                                                    <div style={styles.timelineRail}>
+                                                                                        <span style={{
+                                                                                            ...styles.timelineDot,
+                                                                                            boxShadow: isCurrent ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
+                                                                                            backgroundColor: stageMeta.color === 'red' ? '#ef4444' :
+                                                                                                stageMeta.color === 'green' ? '#22c55e' :
+                                                                                                    stageMeta.color === 'blue' ? '#3b82f6' :
+                                                                                                        stageMeta.color === 'purple' ? '#8b5cf6' :
+                                                                                                            stageMeta.color === 'gold' ? '#f59e0b' :
+                                                                                                                stageMeta.color === 'cyan' ? '#06b6d4' : '#64748b'
+                                                                                        }} />
+                                                                                        {!isLast && <span style={styles.timelineLine} />}
+                                                                                    </div>
+                                                                                    <div style={{
+                                                                                        ...styles.timelineContent,
+                                                                                        border: isCurrent ? '1px solid #bfdbfe' : '1px solid transparent',
+                                                                                        background: isCurrent ? '#eff6ff' : 'transparent',
+                                                                                        borderRadius: 8,
+                                                                                        padding: isCurrent ? '6px 8px' : 0,
+                                                                                    }}>
+                                                                                        <div style={styles.timelineTitleRow}>
+                                                                                            <Text style={styles.timelineTitle}>{label}</Text>
+                                                                                            <Space size={6}>
+                                                                                                <Tag color={sourceBadge.color} style={{ margin: 0, fontSize: 10 }}>
+                                                                                                    {sourceBadge.label}
+                                                                                                </Tag>
+                                                                                                <Text type="secondary" style={styles.timelineDate}>
+                                                                                                    {entry.changedAt ? dayjs(entry.changedAt).format('DD MMM YYYY, HH:mm') : 'Date inconnue'}
+                                                                                                </Text>
+                                                                                            </Space>
+                                                                                        </div>
+                                                                                        {entry.note ? (
+                                                                                            <Text type="secondary" style={styles.timelineNote}>{entry.note}</Text>
+                                                                                        ) : null}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                    {(hasHidden || stageHistory.length > 2) && (
+                                                                        <Button
+                                                                            type="link"
+                                                                            size="small"
+                                                                            style={{ paddingInline: 0, marginTop: 4 }}
+                                                                            onClick={() => toggleTimeline(app._id)}
+                                                                            icon={isExpanded ? <UpOutlined /> : <DownOutlined />}
+                                                                        >
+                                                                            {isExpanded ? 'Réduire l’historique' : `Voir tout l’historique (${stageHistory.length})`}
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         }
                                                     />
@@ -462,6 +606,75 @@ const styles = {
     applicationItem: {
         padding: '20px 0',
         borderBottom: '1px solid #f1f5f9'
+    },
+    timelineWrap: {
+        marginTop: 14,
+        padding: '10px 12px',
+        borderRadius: 10,
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+    },
+    timelineHead: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
+    },
+    timelineList: {
+        marginTop: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+    },
+    timelineItem: {
+        display: 'flex',
+        gap: 10,
+    },
+    timelineRail: {
+        width: 14,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        flexShrink: 0,
+    },
+    timelineDot: {
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        marginTop: 2,
+    },
+    timelineLine: {
+        width: 2,
+        flex: 1,
+        minHeight: 14,
+        marginTop: 2,
+        background: '#cbd5e1',
+        borderRadius: 999,
+    },
+    timelineContent: {
+        flex: 1,
+        minWidth: 0,
+        paddingBottom: 4,
+    },
+    timelineTitleRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: 10,
+        flexWrap: 'wrap',
+    },
+    timelineTitle: {
+        fontSize: 12,
+        fontWeight: 700,
+    },
+    timelineDate: {
+        fontSize: 11,
+    },
+    timelineNote: {
+        display: 'block',
+        marginTop: 2,
+        fontSize: 11,
     },
     statRow: {
         display: 'flex',

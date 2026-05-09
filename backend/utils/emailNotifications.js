@@ -73,6 +73,51 @@ async function notifyCandidateNewMatch(candidateId, { testTitle, matchScore }) {
     );
 }
 
+async function notifyPipelineMatchingPositive(candidateId, { testTitle, matchScore }) {
+    const scoreLine = matchScore != null && Number.isFinite(matchScore)
+        ? `Score de compatibilité CV / poste : ${Math.round(matchScore)} %.\n\n`
+        : '';
+    return sendUserEmail(
+        candidateId,
+        `[Recruit AI] Pré-sélection réussie — ${testTitle}`,
+        `${scoreLine}Votre profil correspond aux attentes initiales de l’offre. Votre évaluation technique a été enregistrée dans la plateforme.\n\n` +
+        'Consultez l’espace candidat pour la suite du processus.',
+        'emailPipelineMatchingPositive'
+    );
+}
+
+async function notifyPipelineMatchingNegative(candidateId, { testTitle, matchScore, threshold, justification }) {
+    return sendUserEmail(
+        candidateId,
+        `[Recruit AI] Candidature non retenue (adéquation profil) — ${testTitle}`,
+        `Après analyse automatique du CV et du poste, votre dossier ne permet pas de poursuivre pour cette offre.\n\n` +
+        `Score de matching : ${Math.round(matchScore)} % (seuil requis : ${threshold} %).\n\n` +
+        `Motif synthétique :\n${justification}\n\n` +
+        'Conformément au processus, votre candidature peut être clôturée et retirée de la base active.',
+        'emailPipelineMatchingNegative'
+    );
+}
+
+async function notifyPipelineAssessmentPass(candidateId, { testTitle, score }) {
+    return sendUserEmail(
+        candidateId,
+        `[Recruit AI] Réussite au test — ${testTitle}`,
+        `Félicitations : vous avez obtenu ${score} % à l’évaluation technique.\n\n` +
+        'L’équipe recrutement est informée et pourra vous convoigner pour un entretien. Surveillez vos notifications sur la plateforme.',
+        'emailPipelineAssessmentPass'
+    );
+}
+
+async function notifyPipelineAssessmentFail(candidateId, { testTitle, score, threshold }) {
+    return sendUserEmail(
+        candidateId,
+        `[Recruit AI] Résultat du test — ${testTitle}`,
+        `Votre score (${score} %) est inférieur au seuil de réussite (${threshold} %).\n\n` +
+        'Selon la configuration de l’offre, votre candidature peut être automatiquement retirée. Vous pouvez postuler à d’autres opportunités depuis l’annuaire des offres.',
+        'emailPipelineAssessmentFail'
+    );
+}
+
 module.exports = {
     smtpConfigured,
     notifyCandidateScore,
@@ -80,4 +125,8 @@ module.exports = {
     notifyCandidateApplicationStage,
     notifyCandidateInterviewScheduled,
     notifyCandidateNewMatch,
+    notifyPipelineMatchingPositive,
+    notifyPipelineMatchingNegative,
+    notifyPipelineAssessmentPass,
+    notifyPipelineAssessmentFail,
 };

@@ -16,18 +16,19 @@ function escapeRegex(value = '') {
 
 class SkillBasedRecommender {
     constructor() {
-        this.ALGORITHM_VERSION = '2.0.0';
+        this.ALGORITHM_VERSION = '2.2.0';
         this.RECOMMENDATION_LIMIT = 10;
         this.STALE_RECOMMENDATIONS_MS = 24 * 60 * 60 * 1000;
 
         this.SCORE_WEIGHTS = {
-            skillCoverage: 0.33,
-            skillAlignment: 0.17,
-            proficiency: 0.14,
-            experience: 0.12,
-            location: 0.08,
-            jobType: 0.06,
-            momentum: 0.10,
+            hardRequirements: 0.26,
+            skillCoverage: 0.22,
+            skillAlignment: 0.16,
+            proficiency: 0.12,
+            experience: 0.10,
+            location: 0.06,
+            jobType: 0.03,
+            momentum: 0.05,
         };
 
         this.SKILL_WEIGHTS = {
@@ -81,11 +82,18 @@ class SkillBasedRecommender {
         this.SKILL_ALIASES = {
             'node js': 'nodejs',
             'node.js': 'nodejs',
+            node: 'nodejs',
             reactjs: 'react',
             'react js': 'react',
             vue: 'vue.js',
+            'vue js': 'vue.js',
             'c sharp': 'c#',
             'dot net': '.net',
+            postgres: 'postgresql',
+            'postgre sql': 'postgresql',
+            mongo: 'mongodb',
+            spring: 'spring boot',
+            k8s: 'kubernetes',
             'google cloud': 'gcp',
             'google cloud platform': 'gcp',
             'ci cd': 'ci/cd',
@@ -125,6 +133,22 @@ class SkillBasedRecommender {
             hybride: 'hybrid',
             hybrid: 'hybrid',
         };
+
+        this.HARD_REQUIREMENT_PATTERNS = [
+            /must have/i,
+            /required/i,
+            /requirement/i,
+            /mandatory/i,
+            /essential/i,
+            /strong\b/i,
+            /expertise\b/i,
+            /experience with/i,
+            /maitrise/i,
+            /obligatoire/i,
+            /indispensable/i,
+            /requis/i,
+            /necessaire/i,
+        ];
     }
 
     normalizeText(value) {
@@ -163,13 +187,16 @@ class SkillBasedRecommender {
         if (!text) return [];
 
         const found = new Set();
-        const skillEntries = Object.keys(this.SKILL_WEIGHTS);
+        const skillEntries = Array.from(new Set([
+            ...Object.keys(this.SKILL_WEIGHTS),
+            ...Object.keys(this.SKILL_ALIASES),
+        ]));
 
         for (const rawSkill of skillEntries) {
             const normalizedSkill = this.normalizeText(rawSkill);
             if (!normalizedSkill) continue;
 
-            const pattern = new RegExp(`(^|\\b)${escapeRegex(normalizedSkill)}(\\b|$)`, 'i');
+            const pattern = new RegExp(`(^|[^a-z0-9+#/.])${escapeRegex(normalizedSkill)}([^a-z0-9+#/.]|$)`, 'i');
             if (pattern.test(text)) {
                 found.add(this.normalizeSkill(rawSkill));
             }
@@ -180,6 +207,33 @@ class SkillBasedRecommender {
 
     extractSkillsFromJobRole(jobRole) {
         return this.extractSkillsFromText(jobRole);
+    }
+
+    extractHardRequirementSkills(test = {}) {
+        const evaluationText = [test?.evaluationCriteria].filter(Boolean).join(' ');
+        const highSignalText = [test?.description, test?.title, test?.jobRole, test?.evaluationCriteria]
+            .filter(Boolean)
+            .join('\n');
+
+        const hardSkills = new Set(this.extractSkillsFromText(evaluationText));
+        const fragments = highSignalText
+            .split(/[\n.;:!?]/)
+            .map((fragment) => fragment.trim())
+            .filter(Boolean);
+
+        fragments.forEach((fragment) => {
+            if (!this.HARD_REQUIREMENT_PATTERNS.some((pattern) => pattern.test(fragment))) return;
+            this.extractSkillsFromText(fragment).forEach((skill) => hardSkills.add(skill));
+        });
+
+        if (hardSkills.size === 0 && evaluationText.trim()) {
+            this.extractSkillsFromText(evaluationText)
+                .sort((left, right) => this.getSkillWeight(right) - this.getSkillWeight(left))
+                .slice(0, 2)
+                .forEach((skill) => hardSkills.add(skill));
+        }
+
+        return Array.from(hardSkills);
     }
 
     hasSkill(userSkills = [], skill) {
@@ -281,7 +335,7 @@ class SkillBasedRecommender {
     }
 
     inferTargetExperienceLevel(test) {
-        const text = this.normalizeText([test?.title, test?.jobRole, test?.description].filter(Boolean).join(' '));
+        const text = this.normalizeText([test?.title, test?.jobRole, test?.description, test?.evaluationCriteria].filter(Boolean).join(' '));
         const scoreMap = new Map(this.EXPERIENCE_LEVELS.map((level, index) => [level, index]));
         let best = 'Junior';
         let bestScore = -1;
@@ -300,22 +354,22 @@ class SkillBasedRecommender {
     buildUserProfile(user, submissions = []) {
         const directSkills = Array.isArray(user?.skills) ? user.skills : [];
         const cvSkills = Array.isArray(user?.cvAnalysis?.detectedSkills) ? user.cvAnalysis.detectedSkills : [];
-        const profileSkills = new Set([...directSkills, ...cvSkills].map((skill) => this.normalizeSkill(skill)).filter(Boolean));
+        const explicitSkills = new Set([...directSkills, ...cvSkills].map((skill) => this.normalizeSkill(skill)).filter(Boolean));
+        const profileSkills = new Set(explicitSkills);
         const skillProficiency = {};
         const scoreBuckets = {};
 
         submissions.forEach((submission) => {
             const test = submission?.testId;
             if (!test) return;
-            const extracted = this.extractSkillsFromText([test.title, test.jobRole, test.description].filter(Boolean).join(' '));
+            const extracted = this.extractSkillsFromText([test.title, test.jobRole, test.description, test.evaluationCriteria].filter(Boolean).join(' '));
             extracted.forEach((skill) => {
-                profileSkills.add(skill);
                 if (!scoreBuckets[skill]) scoreBuckets[skill] = [];
                 scoreBuckets[skill].push(Number(submission.totalScore) || 0);
             });
         });
 
-        Array.from(profileSkills).forEach((skill) => {
+        Array.from(explicitSkills).forEach((skill) => {
             const years = Number(user?.experienceYears || 0);
             const base = clamp((years / 10) * 100, 20, 90);
             skillProficiency[skill] = Math.round(clamp(base * (0.75 + this.getSkillWeight(skill) / 2), 20, 96));
@@ -324,7 +378,13 @@ class SkillBasedRecommender {
         Object.entries(scoreBuckets).forEach(([skill, scores]) => {
             if (!Array.isArray(scores) || scores.length === 0) return;
             const average = scores.reduce((sum, value) => sum + value, 0) / scores.length;
-            skillProficiency[skill] = Math.max(skillProficiency[skill] || 0, this.scoreToProficiency(average));
+            const maxScore = Math.max(...scores);
+            const hasStrongEvidence = average >= 72 || maxScore >= 85 || (scores.length >= 2 && average >= 65);
+
+            if (explicitSkills.has(skill) || hasStrongEvidence) {
+                profileSkills.add(skill);
+                skillProficiency[skill] = Math.max(skillProficiency[skill] || 0, this.scoreToProficiency(average));
+            }
         });
 
         const preferredLocations = [user?.preferredLocation, user?.city]
@@ -454,46 +514,72 @@ class SkillBasedRecommender {
         return Math.round(clamp(score, 25, 100));
     }
 
-    deriveCategory(score, missingSkills = []) {
+    calculateHardRequirementScore(requiredSkills = [], userSkills = []) {
+        if (!requiredSkills.length) return 100;
+
+        const matchedCount = requiredSkills.filter((skill) => this.hasSkill(userSkills, skill)).length;
+        const ratio = matchedCount / requiredSkills.length;
+
+        if (ratio === 1) return 100;
+        if (ratio >= 0.75) return 72;
+        if (ratio >= 0.5) return 46;
+        if (ratio > 0) return 24;
+        return 0;
+    }
+
+    deriveCategory(score, missingSkills = [], missingHardRequirements = []) {
+        if (missingHardRequirements.length > 0) {
+            if (score >= 72 && missingHardRequirements.length === 1) return 'GROWTH_MATCH';
+            return 'EXPLORATION';
+        }
         if (score >= 78 && missingSkills.length <= 2) return 'STRONG_MATCH';
         if (score >= 58) return 'GROWTH_MATCH';
         return 'EXPLORATION';
     }
 
-    buildRecommendationReason(score, matchedSkills, missingSkills, userProfile) {
+    buildRecommendationReason(score, matchedSkills, missingSkills, userProfile, missingHardRequirements = []) {
         const topMatched = (matchedSkills || []).slice(0, 3);
+        if (missingHardRequirements.length > 0) {
+            return `Frein principal : il manque ${missingHardRequirements.slice(0, 2).join(', ')} pour cette offre`;
+        }
         if (score >= 80) {
             if (topMatched.length > 0) {
-                return `Strong fit with your skills: ${topMatched.join(', ')}`;
+                return `Correspondance forte avec vos competences : ${topMatched.join(', ')}`;
             }
-            return `Strong fit for your ${userProfile.experienceLevel || 'current'} profile`;
+            return `Correspondance forte avec votre profil ${userProfile.experienceLevel || 'actuel'}`;
         }
         if (score >= 60) {
             if (topMatched.length > 0 && (missingSkills || []).length > 0) {
-                return `Good fit with growth path from ${topMatched.join(', ')}`;
+                return `Bon alignement avec une marge de progression depuis ${topMatched.join(', ')}`;
             }
-            return 'Good growth opportunity with your current profile';
+            return 'Bonne opportunite d evolution avec votre profil actuel';
         }
-        return 'Exploration opportunity to expand your skill set';
+        return 'Opportunite d exploration pour elargir vos competences';
     }
 
-    buildFitSummary(scoreBreakdown = {}) {
+    buildFitSummary(scoreBreakdown = {}, missingHardRequirements = []) {
+        if (missingHardRequirements.length > 0) {
+            return `Exigences critiques manquantes : ${missingHardRequirements.slice(0, 2).join(', ')}`;
+        }
         const strongest = Object.entries(scoreBreakdown)
             .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
             .slice(0, 2)
             .map(([key]) => key);
         return strongest.length > 0
-            ? `Best aligned on ${strongest.join(' + ')}`
-            : 'General alignment based on available profile signals';
+            ? `Meilleur alignement sur ${strongest.join(' + ')}`
+            : 'Alignement general base sur les signaux disponibles';
     }
 
     scoreSingleTest(test, userProfile = {}) {
-        const textBlock = [test?.title, test?.jobRole, test?.description].filter(Boolean).join(' ');
+        const textBlock = [test?.title, test?.jobRole, test?.description, test?.evaluationCriteria].filter(Boolean).join(' ');
         const testSkills = this.extractSkillsFromText(textBlock);
+        const hardRequirementSkills = this.extractHardRequirementSkills(test);
         const matchedSkills = testSkills.filter((skill) => this.hasSkill(userProfile.skills, skill));
         const missingSkills = testSkills.filter((skill) => !this.hasSkill(userProfile.skills, skill));
+        const missingHardRequirements = hardRequirementSkills.filter((skill) => !this.hasSkill(userProfile.skills, skill));
 
         const scoreBreakdown = {
+            hardRequirements: this.calculateHardRequirementScore(hardRequirementSkills, userProfile.skills),
             skillCoverage: this.calculateSkillCoverageScore(testSkills, userProfile.skills),
             skillAlignment: this.calculateSkillAlignmentScore(testSkills, userProfile.skills),
             proficiency: this.calculateProficiencyScore(testSkills, userProfile),
@@ -506,11 +592,21 @@ class SkillBasedRecommender {
         const weighted = Object.entries(this.SCORE_WEIGHTS).reduce((sum, [key, weight]) => {
             return sum + (Number(scoreBreakdown[key] || 0) * weight);
         }, 0);
-        const score = Math.round(clamp(weighted, 0, 100));
+        const hardRequirementPenalty = missingHardRequirements.length > 0
+            ? Math.min(38, 14 * missingHardRequirements.length)
+            : 0;
+
+        let score = Math.round(clamp(weighted - hardRequirementPenalty, 0, 100));
+        if (hardRequirementSkills.length > 0 && missingHardRequirements.length === hardRequirementSkills.length) {
+            score = Math.min(score, 34);
+        } else if (missingHardRequirements.length >= 2) {
+            score = Math.min(score, 54);
+        }
 
         const confidence = Math.round(clamp(
             42 +
             (testSkills.length > 0 ? 12 : 0) +
+            (hardRequirementSkills.length > 0 ? 8 : 0) +
             (matchedSkills.length * 6) +
             ((userProfile.activitySignals?.totalSubmissions || 0) > 0 ? 10 : 0) +
             ((userProfile.skills || []).length > 0 ? 10 : 0),
@@ -518,7 +614,7 @@ class SkillBasedRecommender {
             97
         ));
 
-        const category = this.deriveCategory(score, missingSkills);
+        const category = this.deriveCategory(score, missingSkills, missingHardRequirements);
         const learningOpportunities = this.buildLearningOpportunities(missingSkills, userProfile);
         const skillGaps = missingSkills.map((skill) => ({
             skill,
@@ -533,8 +629,10 @@ class SkillBasedRecommender {
             matchScore: score,
             confidence,
             category,
-            reason: this.buildRecommendationReason(score, matchedSkills, missingSkills, userProfile),
-            fitSummary: this.buildFitSummary(scoreBreakdown),
+            reason: this.buildRecommendationReason(score, matchedSkills, missingSkills, userProfile, missingHardRequirements),
+            fitSummary: this.buildFitSummary(scoreBreakdown, missingHardRequirements),
+            hardRequirementSkills,
+            missingHardRequirements,
             matchedSkills,
             missingSkills,
             skillGaps,

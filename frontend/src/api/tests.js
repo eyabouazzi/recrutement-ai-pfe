@@ -115,6 +115,7 @@ export async function updateTest(id, data) {
 export async function getPublicTests(params = {}) {
     try {
         const queryParams = new URLSearchParams();
+        if (params.all) queryParams.append('all', 'true');
         
         // Add pagination parameters
         if (params.page) queryParams.append('page', params.page);

@@ -17,6 +17,9 @@ const companySchema = new mongoose.Schema({
     description: { type: String, trim: true },
     website: { type: String, trim: true },
     sector: { type: String, trim: true },  // IT, Finance, Marketing...
+    address: { type: String, trim: true },
+    applicationEmail: { type: String, trim: true, lowercase: true },
+    bookingLink: { type: String, trim: true },
     size: {
         type: String,
         enum: ['1-10', '11-50', '51-200', '201-500', '500+'],

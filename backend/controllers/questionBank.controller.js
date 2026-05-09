@@ -1,10 +1,11 @@
 const QuestionBank = require('../models/questionBank.model');
 const Question = require('../models/question.model');
 const Test = require('../models/test.model');
+const { hrCanManageTest } = require('../utils/hrTestAccess');
 
 async function listQuestionBank(req, res) {
     try {
-        const filter = req.user.role === 'admin' ? {} : { createdBy: req.user._id };
+        const filter = { createdBy: req.user._id };
         const items = await QuestionBank.find(filter).sort('-updatedAt').limit(200);
         res.status(200).json({ status: true, items });
     } catch (error) {
@@ -36,12 +37,12 @@ async function attachBankQuestion(req, res) {
         const { testId } = req.body;
         const bank = await QuestionBank.findById(bankId);
         if (!bank) return res.status(404).json({ status: false, message: 'Question banque introuvable' });
-        if (req.user.role !== 'admin' && bank.createdBy.toString() !== req.user._id.toString()) {
+        if (bank.createdBy.toString() !== req.user._id.toString()) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
         const test = await Test.findById(testId);
         if (!test) return res.status(404).json({ status: false, message: 'Test introuvable' });
-        if (req.user.role !== 'admin' && test.createdBy.toString() !== req.user._id.toString()) {
+        if (!(await hrCanManageTest(req.user, test))) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
         const isQcm = bank.type === 'QCM';
@@ -62,7 +63,7 @@ async function deleteBankQuestion(req, res) {
     try {
         const bank = await QuestionBank.findById(req.params.bankId);
         if (!bank) return res.status(404).json({ status: false, message: 'Introuvable' });
-        if (req.user.role !== 'admin' && bank.createdBy.toString() !== req.user._id.toString()) {
+        if (bank.createdBy.toString() !== req.user._id.toString()) {
             return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
         await QuestionBank.findByIdAndDelete(req.params.bankId);
@@ -74,8 +75,8 @@ async function deleteBankQuestion(req, res) {
 
 async function clearQuestionBank(req, res) {
     try {
-        // HR can clear their own banks; admin can clear everything.
-        const filter = req.user.role === 'admin' ? {} : { createdBy: req.user._id };
+        // HR can clear only their own banks.
+        const filter = { createdBy: req.user._id };
         const result = await QuestionBank.deleteMany(filter);
         res.status(200).json({ status: true, deletedCount: result.deletedCount || 0 });
     } catch (error) {

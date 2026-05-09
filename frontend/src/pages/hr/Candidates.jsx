@@ -50,7 +50,7 @@ function Candidates() {
             dataIndex: 'role',
             key: 'role',
             render: (role) => (
-                <Tag color={role === 'admin' ? 'red' : role === 'HR' ? 'blue' : 'green'}>
+                <Tag color={role === 'HR' ? 'blue' : 'green'}>
                     {role.toUpperCase()}
                 </Tag>
             )

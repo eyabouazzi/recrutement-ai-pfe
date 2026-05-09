@@ -1,0 +1,105 @@
+.showcase-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 70px;
+}
+
+.showcase-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: clamp(1.2rem, 2vw, 2.2rem);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background:
+    radial-gradient(600px 260px at 100% -10%, rgba(79, 70, 229, 0.18), transparent 60%),
+    radial-gradient(500px 240px at -10% 110%, rgba(8, 145, 178, 0.16), transparent 60%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(242, 247, 255, 0.94));
+  box-shadow: 0 22px 56px rgba(37, 99, 235, 0.14);
+}
+
+.showcase-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: #3730a3;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 0.35rem 0.7rem;
+}
+
+.showcase-hero h1 {
+  margin: 0.85rem 0 0.5rem;
+  font-size: clamp(1.6rem, 2.8vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.showcase-hero p {
+  color: #475569;
+  max-width: 72ch;
+}
+
+.showcase-toolbar {
+  margin-top: 1rem;
+}
+
+.showcase-stats {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.7rem;
+}
+
+.showcase-stat {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0.75rem 0.85rem;
+}
+
+.showcase-stat strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
+.showcase-stat span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.showcase-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 1.2rem 0 0.8rem;
+}
+
+.showcase-card {
+  height: 100%;
+  border-radius: 16px !important;
+  border: 1px solid #dbe3f3 !important;
+  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.1) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.showcase-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.16) !important;
+}
+
+.showcase-meta {
+  display: grid;
+  gap: 6px;
+  margin: 0.7rem 0 1rem;
+  color: #64748b;
+}
+
+.showcase-pill {
+  border-radius: 999px !important;
+  font-weight: 600;
+}

@@ -2,24 +2,24 @@
 
 .wow-app {
   --wow-ink: #0f172a;
-  --wow-sub: #475569;
-  --wow-primary-a: #0f766e;
-  --wow-primary-b: #0284c7;
-  --wow-sun-a: #f97316;
-  --wow-sun-b: #f59e0b;
+  --wow-sub: #64748b;
+  --wow-primary-a: #4f46e5;
+  --wow-primary-b: #0891b2;
+  --wow-sun-a: #059669;
+  --wow-sun-b: #d97706;
   --wow-card: #ffffff;
-  --wow-border: #dbe4ef;
-  --wow-surface: #f8fafc;
-  --wow-shadow: 0 16px 34px rgba(2, 6, 23, 0.08);
-  --wow-shadow-lg: 0 22px 50px rgba(2, 6, 23, 0.14);
+  --wow-border: #dbe3f3;
+  --wow-surface: #f4f7ff;
+  --wow-shadow: 0 18px 38px rgba(37, 99, 235, 0.10);
+  --wow-shadow-lg: 0 26px 56px rgba(37, 99, 235, 0.16);
 }
 
 body {
   font-family: 'Manrope', 'Sora', 'Segoe UI', sans-serif;
   background:
-    radial-gradient(900px 420px at 100% -10%, rgba(14, 165, 233, 0.08), transparent 60%),
-    radial-gradient(900px 420px at -10% 100%, rgba(249, 115, 22, 0.08), transparent 60%),
-    #f8fafc;
+    radial-gradient(900px 420px at 100% -10%, rgba(79, 70, 229, 0.16), transparent 60%),
+    radial-gradient(900px 420px at -10% 100%, rgba(8, 145, 178, 0.12), transparent 60%),
+    linear-gradient(180deg, #f8faff 0%, #f1f6ff 100%);
 }
 
 .wow-app .ant-card {
@@ -37,17 +37,17 @@ body {
   border: none !important;
   color: #fff !important;
   background: linear-gradient(120deg, var(--wow-primary-a), var(--wow-primary-b)) !important;
-  box-shadow: 0 12px 24px rgba(2, 132, 199, 0.26) !important;
+  box-shadow: 0 14px 30px rgba(138, 106, 61, 0.24) !important;
 }
 
 .wow-app .ant-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px rgba(2, 132, 199, 0.32) !important;
+  box-shadow: 0 18px 36px rgba(138, 106, 61, 0.30) !important;
 }
 
 .wow-app .ant-btn-default:hover {
-  color: var(--wow-primary-b) !important;
-  border-color: rgba(2, 132, 199, 0.45) !important;
+  color: var(--wow-primary-a) !important;
+  border-color: rgba(138, 106, 61, 0.45) !important;
 }
 
 .wow-app .ant-input,
@@ -60,8 +60,8 @@ body {
 .wow-app .ant-input:focus,
 .wow-app .ant-input-affix-wrapper-focused,
 .wow-app .ant-select-focused .ant-select-selector {
-  border-color: rgba(2, 132, 199, 0.62) !important;
-  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.14) !important;
+  border-color: rgba(138, 106, 61, 0.44) !important;
+  box-shadow: 0 0 0 4px rgba(183, 154, 106, 0.14) !important;
 }
 
 .wow-app .ant-table-wrapper {
@@ -72,13 +72,13 @@ body {
 }
 
 .wow-app .ant-table-thead > tr > th {
-  background: linear-gradient(180deg, #f8fafc, #edf2f7) !important;
+  background: linear-gradient(180deg, #f8faff, #edf3ff) !important;
   color: #0f172a !important;
   font-weight: 700 !important;
 }
 
 .wow-app .ant-table-tbody > tr:hover > td {
-  background: rgba(2, 132, 199, 0.06) !important;
+  background: rgba(79, 70, 229, 0.08) !important;
 }
 
 .wow-app .ant-modal-content {
@@ -368,12 +368,33 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  background:
+    radial-gradient(520px 300px at 14% 10%, rgba(183, 154, 106, 0.16), transparent 64%),
+    radial-gradient(560px 340px at 96% 88%, rgba(95, 111, 99, 0.12), transparent 60%),
+    radial-gradient(420px 260px at 74% 18%, rgba(168, 107, 84, 0.08), transparent 58%);
+}
+
+.wow-dashboard-main {
+  position: relative;
+  background:
+    radial-gradient(480px 220px at 100% 0%, rgba(183, 154, 106, 0.10), transparent 62%),
+    radial-gradient(420px 220px at 0% 100%, rgba(95, 111, 99, 0.08), transparent 60%),
+    rgba(255, 251, 245, 0.42);
+}
+
+.wow-dashboard-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0));
 }
 
 .wow-auth-shell::before {
   background:
-    radial-gradient(480px 280px at 15% 10%, rgba(14, 165, 233, 0.22), transparent 65%),
-    radial-gradient(520px 340px at 90% 85%, rgba(249, 115, 22, 0.16), transparent 60%);
+    radial-gradient(480px 280px at 15% 10%, rgba(183, 154, 106, 0.18), transparent 65%),
+    radial-gradient(520px 340px at 90% 85%, rgba(95, 111, 99, 0.14), transparent 60%);
 }
 
 .wow-candidate-shell::before {
@@ -390,26 +411,24 @@ body {
 
 .wow-hr-shell {
   background:
-    radial-gradient(420px 260px at 0% 0%, rgba(14, 165, 233, 0.33), transparent 60%),
-    radial-gradient(420px 260px at 100% 100%, rgba(249, 115, 22, 0.27), transparent 60%),
-    linear-gradient(135deg, #0c1626 0%, #103450 60%, #0f766e 120%);
+    radial-gradient(420px 260px at 0% 0%, rgba(183, 154, 106, 0.18), transparent 60%),
+    radial-gradient(420px 260px at 100% 100%, rgba(95, 111, 99, 0.14), transparent 60%),
+    linear-gradient(135deg, #fdfaf4 0%, #f5eee3 60%, #efe4d5 120%);
 }
 
 .wow-hr-shell .dashboard-header {
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(223, 209, 191, 0.76);
+  background: rgba(255, 251, 245, 0.82);
 }
 
 .wow-hr-shell .dashboard-title {
-  background: linear-gradient(120deg, #e2e8f0 0%, #bae6fd 55%, #fde68a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #1f2937;
 }
 
 .wow-hr-shell .modern-sidebar {
-  border-right: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(2, 6, 23, 0.52);
+  border-right: 1px solid rgba(223, 209, 191, 0.42);
+  background:
+    linear-gradient(180deg, rgba(63, 49, 28, 0.96) 0%, rgba(47, 39, 27, 0.96) 100%);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -419,7 +438,7 @@ body {
 }
 
 .wow-hr-shell .modern-nav-item.active {
-  background: linear-gradient(120deg, rgba(15, 118, 110, 0.55), rgba(2, 132, 199, 0.55));
+  background: linear-gradient(120deg, rgba(138, 106, 61, 0.94), rgba(183, 154, 106, 0.88));
   color: #ffffff !important;
 }
 

@@ -20,7 +20,13 @@ function toClientRecommendation(item) {
     base.matchScore = base.matchScore || base.score || 0;
     base.requiredSkills = Array.isArray(base.requiredSkills)
         ? base.requiredSkills
-        : Array.from(new Set([...(base.matchedSkills || []), ...(base.missingSkills || [])]));
+        : Array.from(new Set([
+            ...(base.hardRequirementSkills || []),
+            ...(base.matchedSkills || []),
+            ...(base.missingSkills || []),
+        ]));
+    base.hardRequirementSkills = Array.isArray(base.hardRequirementSkills) ? base.hardRequirementSkills : [];
+    base.missingHardRequirements = Array.isArray(base.missingHardRequirements) ? base.missingHardRequirements : [];
     base.skills = Array.isArray(base.skills) ? base.skills : base.matchedSkills || [];
     return base;
 }

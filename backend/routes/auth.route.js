@@ -12,7 +12,7 @@ const {
     getSmtpStatus,
     sendSmtpTestEmail,
 } = require('../controllers/auth.controller');
-const { updateMyProfile } = require('../controllers/profile.controller');
+const { updateMyProfile, previewMyProfileAnalysis } = require('../controllers/profile.controller');
 const router = express.Router();
 const { protect, restrictTo } = require('../middlewares/auth.middleware');
 const upload = require('../utils/upload');
@@ -31,12 +31,14 @@ router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.get('/me', protect, getMe);
+router.post('/me/profile-analysis-preview', protect, previewMyProfileAnalysis);
 router.patch(
     '/me/profile',
     protect,
     profileUpload.fields([
         { name: 'avatar', maxCount: 1 },
         { name: 'cv', maxCount: 1 },
+        { name: 'companyLogo', maxCount: 1 },
     ]),
     updateMyProfile
 );
@@ -45,8 +47,8 @@ router.delete('/me/account-data', protect, deleteMyAccountData);
 router.patch('/me/preferences', protect, patchPreferences);
 router.put('/change-password', protect, changePassword);
 
-// SMTP / email deliverability (HR/admin only)
-router.get('/smtp-status', protect, restrictTo('HR', 'admin'), getSmtpStatus);
-router.post('/smtp-test-email', protect, restrictTo('HR', 'admin'), sendSmtpTestEmail);
+// SMTP / email deliverability (HR only)
+router.get('/smtp-status', protect, restrictTo('HR'), getSmtpStatus);
+router.post('/smtp-test-email', protect, restrictTo('HR'), sendSmtpTestEmail);
 
 module.exports = router; 

@@ -120,8 +120,8 @@ const EditUserDrawer = (props) => {
                         name="role"
                     >
                         <Select placeholder="Select a role">
-                            <Select.Option value="admin">Admin</Select.Option>
-                            <Select.Option value="user">User</Select.Option>
+                            <Select.Option value="HR">HR</Select.Option>
+                            <Select.Option value="candidat">Candidat</Select.Option>
                         </Select>
                     </Form.Item>
 

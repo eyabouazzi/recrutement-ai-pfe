@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Button, Avatar, Typography, Tag, Divider, Spin, message, Input, List, Timeline, Tabs, DatePicker, Progress } from 'antd';
 import { UserOutlined, ArrowLeftOutlined, MailOutlined, BankOutlined, ClockCircleOutlined, SendOutlined, CheckCircleOutlined, RobotOutlined, DownloadOutlined, CalendarOutlined } from '@ant-design/icons';
+import AdvancedJobMatchCanvas from '../../Components/AdvancedJobMatchCanvas.jsx';
 import { fetchSubmissionDetails, addCandidateNote, updateSubmissionStage, updateSubmissionPipeline } from '../../api/submissions';
 import dayjs from 'dayjs';
 import { getAvatarUrl } from '../../utils/avatar.js';
@@ -23,6 +24,7 @@ const ANOMALY_LABELS = {
     FULLSCREEN_EXITS: 'Sorties du plein ecran',
     CLIENT_CLOCK_MISMATCH: 'Horodatage client incoherent',
     DEVICE_SWITCH: 'Changement d\'appareil/IP',
+    INACTIVITY_GAP: 'Longue inactivite avant soumission',
 };
 
 const STAGES = [
@@ -85,7 +87,12 @@ export default function CandidateProfile() {
 
     const handleStageChange = async (newStage) => {
         try {
-            await updateSubmissionStage(id, newStage);
+            const response = await updateSubmissionStage(id, newStage);
+            if (response?.deleted) {
+                message.success(response.message || 'Candidature supprimée automatiquement');
+                navigate('/rh/pipeline');
+                return;
+            }
             setSubmission(prev => ({ ...prev, stage: newStage }));
             message.success(`Candidat déplacé vers ${newStage}`);
         } catch (error) {
@@ -142,13 +149,19 @@ export default function CandidateProfile() {
     const test = submission.testId || {};
     const stageInfo = STAGES.find(s => s.id === submission.stage) || STAGES[0];
     const cvAnalysis = candidate.cvAnalysis || {};
+    const jobMatch = submission.jobMatchAnalysis || {};
+    const jobMatchScore = typeof jobMatch.score === 'number' ? jobMatch.score : 0;
+    const enriched = jobMatch.enrichedCvSignals || {};
+    const creativeInsights = Array.isArray(jobMatch.matchEngine?.creativeInsights) ? jobMatch.matchEngine.creativeInsights : [];
+    const dimensions = jobMatch.matchEngine?.dimensions || {};
     const detectedSkillItems = Array.isArray(cvAnalysis.detectedSkills) && cvAnalysis.detectedSkills.length > 0
         ? cvAnalysis.detectedSkills
         : (candidate.skills || []);
-    const cvDownloadUrl = candidate.cvUrl
-        ? (candidate.cvUrl.startsWith('http://') || candidate.cvUrl.startsWith('https://')
-            ? candidate.cvUrl
-            : `${baseUrl}${candidate.cvUrl}`)
+    const cvSourceUrl = submission.applicationCvUrl || candidate.cvUrl || '';
+    const cvDownloadUrl = cvSourceUrl
+        ? (cvSourceUrl.startsWith('http://') || cvSourceUrl.startsWith('https://')
+            ? cvSourceUrl
+            : `${baseUrl}${cvSourceUrl}`)
         : '';
 
     return (
@@ -257,6 +270,218 @@ export default function CandidateProfile() {
                             </Button>
                         )}
                     </Card>
+
+                    <Card
+                        title={<><CheckCircleOutlined /> Match CV vs poste — carte intelligente</>}
+                        style={{ marginTop: 24 }}
+                    >
+                        <Text type="secondary" block style={{ marginBottom: 14 }}>
+                            Carte multi-dimensionnelle (compétences, expérience, résonance lexicale, polyvalence) entre le CV et cette offre.
+                        </Text>
+
+                        <div style={{ marginBottom: 20 }}>
+                            <AdvancedJobMatchCanvas jobMatch={jobMatch} variant="full" />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                            <Progress
+                                style={{ flex: 1, minWidth: 200 }}
+                                percent={jobMatchScore}
+                                strokeColor={jobMatchScore >= 75 ? '#10b981' : jobMatchScore >= 55 ? '#f59e0b' : '#ef4444'}
+                            />
+                            {jobMatch.confidence && <Tag color="geekblue">Confiance {jobMatch.confidence}</Tag>}
+                            {jobMatch.roleAlignment && <Tag color="purple">Rôle {jobMatch.roleAlignment}</Tag>}
+                            {jobMatch.experienceAlignment && <Tag color="cyan">Expérience {jobMatch.experienceAlignment}</Tag>}
+                        </div>
+
+                        {jobMatch.summary && (
+                            <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                                {jobMatch.summary}
+                            </Paragraph>
+                        )}
+
+                        <div style={{ display: 'grid', gap: 16 }}>
+                            <div>
+                                <Text strong>Compétences alignées</Text>
+                                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {(jobMatch.matchedSkills || []).length > 0 ? (
+                                        jobMatch.matchedSkills.map((skill) => (
+                                            <Tag key={skill} color="green">{skill}</Tag>
+                                        ))
+                                    ) : (
+                                        <Text type="secondary">Aucune compétence cible clairement alignée.</Text>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <Text strong>Compétences manquantes ou faibles</Text>
+                                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {(jobMatch.missingSkills || []).length > 0 ? (
+                                        jobMatch.missingSkills.map((skill) => (
+                                            <Tag key={skill} color="red">{skill}</Tag>
+                                        ))
+                                    ) : (
+                                        <Text type="secondary">Aucun manque majeur détecté dans le brief du poste.</Text>
+                                    )}
+                                </div>
+                            </div>
+
+                            {(jobMatch.matchingSignals || []).length > 0 && (
+                                <div>
+                                    <Text strong>Signaux de matching</Text>
+                                    <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                                        {jobMatch.matchingSignals.map((item) => (
+                                            <li key={item} style={{ marginBottom: 6 }}>{item}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {(jobMatch.recruiterRecommendations || []).length > 0 && (
+                                <div>
+                                    <Text strong>Actions recommandées au recruteur</Text>
+                                    <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                                        {jobMatch.recruiterRecommendations.map((item) => (
+                                            <li key={item} style={{ marginBottom: 6 }}>{item}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    {/* ── NEW: Enriched CV Signals Card ───── */}
+                    {(enriched.educationLevel || enriched.certifications?.length > 0 || enriched.languages?.length > 0 || creativeInsights.length > 0) && (
+                        <Card
+                            title={<><RobotOutlined /> Signaux CV enrichis — IA</>}
+                            style={{ marginTop: 24 }}
+                            headStyle={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: '#fff', borderRadius: '8px 8px 0 0' }}
+                        >
+                            <div style={{ display: 'grid', gap: 16 }}>
+
+                                {/* Education */}
+                                {enriched.educationLevel && (
+                                    <div>
+                                        <Text strong>🎓 Niveau de formation détecté</Text>
+                                        <div style={{ marginTop: 6 }}>
+                                            <Tag color="blue" style={{ fontSize: 13, padding: '3px 10px' }}>{enriched.educationLevel}</Tag>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Certifications */}
+                                {enriched.certifications?.length > 0 && (
+                                    <div>
+                                        <Text strong>🏅 Certifications détectées</Text>
+                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {enriched.certifications.map((c) => <Tag key={c} color="gold">{c}</Tag>)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Languages */}
+                                {enriched.languages?.length > 0 && (
+                                    <div>
+                                        <Text strong>🌐 Langues identifiées</Text>
+                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {enriched.languages.map((l) => <Tag key={l} color="cyan">{l}</Tag>)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Industry */}
+                                {enriched.industryDomains?.length > 0 && (
+                                    <div>
+                                        <Text strong>🏢 Secteurs d'activité</Text>
+                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {enriched.industryDomains.map((d) => <Tag key={d} color="purple">{d}</Tag>)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Project signals */}
+                                <div>
+                                    <Text strong>💻 Projets & présence en ligne</Text>
+                                    <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {enriched.hasOpenSourceContributions && <Tag color="green">Open Source ✓</Tag>}
+                                        {enriched.hasLiveProjects && <Tag color="green">Projets déployés ✓</Tag>}
+                                        {enriched.projectSignalCount > 0 && <Tag>{enriched.projectSignalCount} signal(s) projet</Tag>}
+                                        {!enriched.hasOpenSourceContributions && !enriched.hasLiveProjects && <Text type="secondary">Aucun signal projet détecté</Text>}
+                                    </div>
+                                </div>
+
+                                {/* Quantified achievements */}
+                                <div>
+                                    <Text strong>📊 Réalisations chiffrées</Text>
+                                    <div style={{ marginTop: 6 }}>
+                                        {enriched.quantifiedAchievements > 0 ? (
+                                            <Tag color={enriched.quantifiedAchievements >= 3 ? 'green' : 'orange'}>
+                                                {enriched.quantifiedAchievements} réalisation(s) quantifiée(s)
+                                            </Tag>
+                                        ) : <Text type="secondary">Aucune réalisation chiffrée détectée</Text>}
+                                    </div>
+                                </div>
+
+                                {/* Leadership */}
+                                <div>
+                                    <Text strong>🎯 Signaux de leadership</Text>
+                                    <div style={{ marginTop: 6 }}>
+                                        {enriched.leadershipSignals > 0 ? (
+                                            <Tag color={enriched.leadershipSignals >= 2 ? 'green' : 'blue'}>
+                                                {enriched.leadershipSignals} marqueur(s) leadership
+                                            </Tag>
+                                        ) : <Text type="secondary">Aucun signal leadership détecté</Text>}
+                                    </div>
+                                </div>
+
+                                {/* Score dimensions */}
+                                {Object.keys(dimensions).length > 0 && (
+                                    <div>
+                                        <Text strong>📐 Dimensions de score (14 axes)</Text>
+                                        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                                            {[
+                                                { key: 'technicalFit', label: 'Adéquation technique', color: '#6366f1' },
+                                                { key: 'educationFit', label: 'Formation', color: '#8b5cf6' },
+                                                { key: 'certificationBoost', label: 'Certifications', color: '#f59e0b' },
+                                                { key: 'languageFit', label: 'Langues', color: '#06b6d4' },
+                                                { key: 'industryAlignment', label: 'Secteur', color: '#10b981' },
+                                                { key: 'projectEvidence', label: 'Projets', color: '#3b82f6' },
+                                                { key: 'quantifiedImpact', label: 'Impact chiffré', color: '#f97316' },
+                                                { key: 'leadershipSignal', label: 'Leadership', color: '#ef4444' },
+                                                { key: 'experienceFit', label: 'Expérience', color: '#84cc16' },
+                                            ].filter(d => typeof dimensions[d.key] === 'number').map(d => (
+                                                <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                    <Text style={{ minWidth: 140, fontSize: 12 }}>{d.label}</Text>
+                                                    <Progress
+                                                        percent={dimensions[d.key]}
+                                                        size="small"
+                                                        strokeColor={d.color}
+                                                        style={{ flex: 1, margin: 0 }}
+                                                    />
+                                                    <Text style={{ minWidth: 32, fontSize: 12, textAlign: 'right' }}>{dimensions[d.key]}</Text>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Creative insights */}
+                                {creativeInsights.length > 0 && (
+                                    <div>
+                                        <Text strong>💡 Insights narratifs IA</Text>
+                                        <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                                            {creativeInsights.map((line, i) => (
+                                                <li key={i} style={{ marginBottom: 6, fontSize: 13, color: '#374151' }}>
+                                                    {line.replace(/\*\*/g, '')}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    )}
 
                     <Card
                         title={<><RobotOutlined /> Analyse sémantique du CV</>}
@@ -531,6 +756,17 @@ export default function CandidateProfile() {
                                         </div>
                                     </div>
                                     <Divider />
+                                    <Title level={5}>Match CV vs poste</Title>
+                                    <Paragraph style={{ background: '#f8fafc', padding: 16, borderRadius: 16, border: '1px solid #e2e8f0' }}>
+                                        {jobMatch.summary || "Aucune analyse de matching disponible."}
+                                    </Paragraph>
+                                    {(jobMatch.matchedSkills || []).length > 0 && (
+                                        <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {jobMatch.matchedSkills.map((skill) => (
+                                                <Tag key={skill} color="green">{skill}</Tag>
+                                            ))}
+                                        </div>
+                                    )}
                                     <Title level={5}>Points clés de l'évaluation</Title>
                                     <Paragraph style={{ background: '#f8fafc', padding: 20, borderRadius: 16, border: '1px solid #e2e8f0', fontStyle: 'italic' }}>
                                         "{submission.feedback}"

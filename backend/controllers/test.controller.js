@@ -1,9 +1,10 @@
-﻿const Test = require('../models/test.model');
+const Test = require('../models/test.model');
 const Question = require('../models/question.model');
 const Submission = require('../models/submission.model');
 const { generateQuestionsAI, generateFallbackQuestions, regenerateSingleQuestionAI } = require('../utils/openai');
 const { logManualActivity } = require('../utils/activityLogger');
 const skillRecommender = require('../utils/skillRecommender');
+const { buildHrTestListFilter, hrCanManageTest } = require('../utils/hrTestAccess');
 
 function createHttpError(statusCode, message) {
     const error = new Error(message);
@@ -49,6 +50,17 @@ function sanitizeAntiCheatPolicy(levelInput, configInput = {}) {
             pasteFlagThreshold: 6,
             fullscreenExitFlagThreshold: 5,
             requireFullscreen: false,
+            maxTabSwitchAllowed: 10,
+            maxFocusLossAllowed: 12,
+            maxPasteAllowed: 10,
+            maxFullscreenExitAllowed: 6,
+            minQuestionDwellSeconds: 5,
+            suspiciousLongAnswerChars: 220,
+            minKeystrokesForLongAnswer: 10,
+            maxRapidAnswersAllowed: 7,
+            blockPaste: false,
+            rejectOnDeviceSwitch: false,
+            rejectOnCriticalFlags: true,
         },
         STANDARD: {
             tabSwitchWarnThreshold: 3,
@@ -57,6 +69,17 @@ function sanitizeAntiCheatPolicy(levelInput, configInput = {}) {
             pasteFlagThreshold: 4,
             fullscreenExitFlagThreshold: 3,
             requireFullscreen: false,
+            maxTabSwitchAllowed: 7,
+            maxFocusLossAllowed: 8,
+            maxPasteAllowed: 6,
+            maxFullscreenExitAllowed: 3,
+            minQuestionDwellSeconds: 6,
+            suspiciousLongAnswerChars: 180,
+            minKeystrokesForLongAnswer: 12,
+            maxRapidAnswersAllowed: 4,
+            blockPaste: false,
+            rejectOnDeviceSwitch: true,
+            rejectOnCriticalFlags: true,
         },
         STRICT: {
             tabSwitchWarnThreshold: 2,
@@ -65,6 +88,17 @@ function sanitizeAntiCheatPolicy(levelInput, configInput = {}) {
             pasteFlagThreshold: 3,
             fullscreenExitFlagThreshold: 2,
             requireFullscreen: true,
+            maxTabSwitchAllowed: 4,
+            maxFocusLossAllowed: 5,
+            maxPasteAllowed: 1,
+            maxFullscreenExitAllowed: 0,
+            minQuestionDwellSeconds: 8,
+            suspiciousLongAnswerChars: 140,
+            minKeystrokesForLongAnswer: 18,
+            maxRapidAnswersAllowed: 2,
+            blockPaste: true,
+            rejectOnDeviceSwitch: true,
+            rejectOnCriticalFlags: true,
         },
     };
 
@@ -83,7 +117,40 @@ function sanitizeAntiCheatPolicy(levelInput, configInput = {}) {
             requireFullscreen: configInput.requireFullscreen !== undefined
                 ? Boolean(configInput.requireFullscreen)
                 : defaults.requireFullscreen,
+            maxTabSwitchAllowed: clampInt(configInput.maxTabSwitchAllowed, 1, defaults.maxTabSwitchAllowed),
+            maxFocusLossAllowed: clampInt(configInput.maxFocusLossAllowed, 1, defaults.maxFocusLossAllowed),
+            maxPasteAllowed: clampInt(configInput.maxPasteAllowed, 0, defaults.maxPasteAllowed),
+            maxFullscreenExitAllowed: clampInt(configInput.maxFullscreenExitAllowed, 0, defaults.maxFullscreenExitAllowed),
+            minQuestionDwellSeconds: clampInt(configInput.minQuestionDwellSeconds, 1, defaults.minQuestionDwellSeconds),
+            suspiciousLongAnswerChars: clampInt(configInput.suspiciousLongAnswerChars, 40, defaults.suspiciousLongAnswerChars),
+            minKeystrokesForLongAnswer: clampInt(configInput.minKeystrokesForLongAnswer, 0, defaults.minKeystrokesForLongAnswer),
+            maxRapidAnswersAllowed: clampInt(configInput.maxRapidAnswersAllowed, 0, defaults.maxRapidAnswersAllowed),
+            blockPaste: configInput.blockPaste !== undefined
+                ? Boolean(configInput.blockPaste)
+                : defaults.blockPaste,
+            rejectOnDeviceSwitch: configInput.rejectOnDeviceSwitch !== undefined
+                ? Boolean(configInput.rejectOnDeviceSwitch)
+                : defaults.rejectOnDeviceSwitch,
+            rejectOnCriticalFlags: configInput.rejectOnCriticalFlags !== undefined
+                ? Boolean(configInput.rejectOnCriticalFlags)
+                : defaults.rejectOnCriticalFlags,
         },
+    };
+}
+
+function sanitizeAdvancedPipelineInput(raw, prev = {}) {
+    if (raw === undefined) return undefined;
+    if (raw === null) return null;
+    if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const p = prev.advancedPipeline && typeof prev.advancedPipeline === 'object' ? prev.advancedPipeline : {};
+    const merged = { ...p, ...raw };
+    const th = Number(merged.matchPassThreshold);
+    return {
+        enabled: Boolean(merged.enabled),
+        matchPassThreshold: Number.isFinite(th) ? Math.min(100, Math.max(0, th)) : 45,
+        removeOnCvMismatch: merged.removeOnCvMismatch !== false,
+        removeOnFailedAssessment: merged.removeOnFailedAssessment !== false,
+        advanceStageOnPass: merged.advanceStageOnPass !== false,
     };
 }
 
@@ -96,10 +163,11 @@ async function createTest(req, res) {
             inviteCode, submissionDeadline, maxAttempts, passThreshold, weightQCM, weightOpen,
             calendlyUrl, webhookUrl, minSecondsPerQuestion,
             antiCheatLevel, antiCheatConfig,
+            advancedPipeline,
         } = req.body;
         const antiCheatPolicy = sanitizeAntiCheatPolicy(antiCheatLevel, antiCheatConfig || {});
 
-        const test = new Test({
+        const testPayload = {
             title,
             description,
             jobRole,
@@ -120,7 +188,12 @@ async function createTest(req, res) {
             antiCheatLevel: antiCheatPolicy.antiCheatLevel,
             antiCheatConfig: antiCheatPolicy.antiCheatConfig,
             createdBy: req.user.id,
-        });
+            companyId: req.user.companyId || undefined,
+        };
+        const ap = sanitizeAdvancedPipelineInput(advancedPipeline, {});
+        if (ap) testPayload.advancedPipeline = ap;
+
+        const test = new Test(testPayload);
 
         await test.save();
 
@@ -150,6 +223,9 @@ async function generateAutoQuestions(req, res) {
         const test = await Test.findById(testId);
         if (!test) {
             return res.status(404).json({ status: false, message: "Test not found" });
+        }
+        if (req.user.role === 'HR' && !(await hrCanManageTest(req.user, test))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé pour ce test.' });
         }
 
         let aiQuestions = await generateQuestionsAI(test.jobRole, test.description, count || 5);
@@ -186,8 +262,23 @@ async function generateAutoQuestions(req, res) {
 // HR/admin: only their own tests; candidates: all tests
 async function getTests(req, res) {
     try {
-        const filter = req.user.role === 'candidat' ? {} : { createdBy: req.user.id };
-        const tests = await Test.find(filter).sort('-createdAt');
+        const filter = req.user.role === 'candidat' ? {} : await buildHrTestListFilter(req.user);
+        let q = Test.find(filter).sort('-createdAt');
+        if (req.user.role !== 'candidat') {
+            q = q.populate({ path: 'createdBy', select: 'firstName lastName _id' });
+        }
+        const tests = await q.lean();
+        if (req.user.role !== 'candidat' && tests.length > 0) {
+            const ids = tests.map((t) => t._id);
+            const counts = await Question.aggregate([
+                { $match: { testId: { $in: ids } } },
+                { $group: { _id: '$testId', n: { $sum: 1 } } },
+            ]);
+            const byTest = Object.fromEntries(counts.map((c) => [String(c._id), c.n]));
+            tests.forEach((t) => {
+                t.questionCount = byTest[String(t._id)] ?? 0;
+            });
+        }
         res.status(200).json({ status: true, tests });
     } catch (error) {
         return sendControllerError(res, error);
@@ -236,8 +327,8 @@ async function getTestById(req, res) {
             });
         }
 
-        if (role === 'HR' && test.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ status: false, message: 'Non autorisÃ© Ã  voir ce test.' });
+        if (role === 'HR' && !(await hrCanManageTest(req.user, test))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé à voir ce test.' });
         }
 
         res.status(200).json({ status: true, test, questions, meta: {} });
@@ -251,6 +342,13 @@ async function addManualQuestion(req, res) {
     try {
         await ensureHrCompanyApproved(req);
         const { testId, type, prompt, options, correctAnswer } = req.body;
+        const parentTest = await Test.findById(testId);
+        if (!parentTest) {
+            return res.status(404).json({ status: false, message: 'Test introuvable' });
+        }
+        if (req.user.role === 'HR' && !(await hrCanManageTest(req.user, parentTest))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
+        }
         const question = new Question({
             testId,
             type,
@@ -269,8 +367,16 @@ async function addManualQuestion(req, res) {
 async function deleteQuestion(req, res) {
     try {
         await ensureHrCompanyApproved(req);
-        const question = await Question.findByIdAndDelete(req.params.id);
+        const question = await Question.findById(req.params.id);
         if (!question) return res.status(404).json({ status: false, message: "Question not found" });
+        const parentTest = await Test.findById(question.testId);
+        if (!parentTest) {
+            return res.status(404).json({ status: false, message: 'Test associé introuvable' });
+        }
+        if (req.user.role === 'HR' && !(await hrCanManageTest(req.user, parentTest))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
+        }
+        await Question.findByIdAndDelete(req.params.id);
         res.status(200).json({ status: true, message: "Question deleted" });
     } catch (error) {
         return sendControllerError(res, error);
@@ -284,8 +390,8 @@ async function deleteTest(req, res) {
         const test = await Test.findById(req.params.id);
         if (!test) return res.status(404).json({ status: false, message: "Test not found" });
 
-        // Only allow the creator or admin to delete
-        if (test.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+        // Only allow the creator (or authorized HR teammate) to delete
+        if (!(await hrCanManageTest(req.user, test))) {
             return res.status(403).json({ status: false, message: "Not authorized to delete this test" });
         }
 
@@ -303,8 +409,8 @@ async function updateTest(req, res) {
         await ensureHrCompanyApproved(req);
         const prev = await Test.findById(req.params.id);
         if (!prev) return res.status(404).json({ status: false, message: "Test not found" });
-        if (req.user.role === 'HR' && prev.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ status: false, message: 'Non autorisÃ©' });
+        if (req.user.role === 'HR' && !(await hrCanManageTest(req.user, prev))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
 
         const {
@@ -312,6 +418,7 @@ async function updateTest(req, res) {
             inviteCode, submissionDeadline, maxAttempts, passThreshold, weightQCM, weightOpen,
             calendlyUrl, webhookUrl, minSecondsPerQuestion,
             antiCheatLevel, antiCheatConfig,
+            advancedPipeline,
         } = req.body;
 
         const payload = { title, description, jobRole, timeLimit, location, employmentType, status };
@@ -335,6 +442,10 @@ async function updateTest(req, res) {
             );
             payload.antiCheatLevel = normalized.antiCheatLevel;
             payload.antiCheatConfig = normalized.antiCheatConfig;
+        }
+        if (advancedPipeline !== undefined) {
+            const ap = sanitizeAdvancedPipelineInput(advancedPipeline, prev);
+            if (ap) payload.advancedPipeline = ap;
         }
 
         let criteriaBump = false;
@@ -381,8 +492,8 @@ async function regenerateQuestion(req, res) {
         if (!question) return res.status(404).json({ status: false, message: 'Question introuvable' });
         const test = await Test.findById(question.testId);
         if (!test) return res.status(404).json({ status: false, message: 'Test introuvable' });
-        if (req.user.role !== 'admin' && test.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ status: false, message: 'Non autorisÃ©' });
+        if (!(await hrCanManageTest(req.user, test))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
         const { instruction } = req.body;
         const regen = await regenerateSingleQuestionAI({
@@ -415,9 +526,10 @@ async function regenerateQuestion(req, res) {
 // Get public published jobs for Careers Page with pagination
 async function getPublicTests(req, res) {
     try {
+        const fetchAll = ['1', 'true', 'yes'].includes(String(req.query.all || '').toLowerCase());
         const page = parseInt(req.query.page, 10) || 1;
         const limit = parseInt(req.query.limit, 10) || 10;
-        const skip = (page - 1) * limit;
+        const skip = fetchAll ? 0 : (page - 1) * limit;
         const employmentTypes = Array.isArray(req.query.employmentType)
             ? req.query.employmentType
             : (req.query.employmentType ? [req.query.employmentType] : []);
@@ -481,16 +593,16 @@ async function getPublicTests(req, res) {
             return av > bv ? sortOrder : -sortOrder;
         });
 
-        const paginated = tests.slice(skip, skip + limit);
+        const paginated = fetchAll ? tests : tests.slice(skip, skip + limit);
 
         res.status(200).json({ 
             status: true, 
             tests: paginated,
             pagination: {
                 currentPage: page,
-                totalPages: Math.ceil(total / limit),
+                totalPages: fetchAll ? 1 : Math.ceil(total / limit),
                 totalItems: total,
-                itemsPerPage: limit
+                itemsPerPage: fetchAll ? total : limit
             }
         });
     } catch (error) {
@@ -538,8 +650,8 @@ async function markQuestionReviewed(req, res) {
         if (!question) return res.status(404).json({ status: false, message: 'Question introuvable' });
         const test = await Test.findById(question.testId);
         if (!test) return res.status(404).json({ status: false, message: 'Test introuvable' });
-        if (req.user.role !== 'admin' && test.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ status: false, message: 'Non autorisÃ©' });
+        if (!(await hrCanManageTest(req.user, test))) {
+            return res.status(403).json({ status: false, message: 'Non autorisé' });
         }
         question.reviewedForPublish = req.body.reviewedForPublish !== false;
         await question.save();
